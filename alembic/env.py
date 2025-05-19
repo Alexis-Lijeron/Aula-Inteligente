@@ -25,6 +25,7 @@ from app.models import (
     materia,
     docente_materia,
     curso,
+    curso_materia,
 )  # importa todos tus modelos
 
 target_metadata = Base.metadata
