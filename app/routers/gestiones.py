@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.gestion import GestionCreate, GestionUpdate, GestionOut
@@ -26,15 +26,12 @@ def validar_campo(nombre: str, valor: str):
 
 @router.post("/", response_model=GestionOut)
 def crear(
-    anio: str = Form(...),
-    descripcion: str = Form(...),
+    datos: GestionCreate,
     db: Session = Depends(get_db),
     payload: dict = Depends(admin_required),
 ):
-    anio = validar_campo("anio", anio)
-    descripcion = validar_campo("descripcion", descripcion)
-
-    datos = GestionCreate(anio=anio, descripcion=descripcion)
+    datos.anio = validar_campo("anio", datos.anio)
+    datos.descripcion = validar_campo("descripcion", datos.descripcion)
     return crud.crear_gestion(db, datos)
 
 
@@ -58,15 +55,12 @@ def obtener(
 @router.put("/{gestion_id}", response_model=GestionOut)
 def actualizar(
     gestion_id: int,
-    anio: str = Form(...),
-    descripcion: str = Form(...),
+    datos: GestionUpdate,
     db: Session = Depends(get_db),
     payload: dict = Depends(admin_required),
 ):
-    anio = validar_campo("anio", anio)
-    descripcion = validar_campo("descripcion", descripcion)
-
-    datos = GestionUpdate(anio=anio, descripcion=descripcion)
+    datos.anio = validar_campo("anio", datos.anio)
+    datos.descripcion = validar_campo("descripcion", datos.descripcion)
     return crud.actualizar_gestion(db, gestion_id, datos)
 
 

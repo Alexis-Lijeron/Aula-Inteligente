@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.curso import CursoCreate, CursoUpdate, CursoOut
@@ -26,18 +26,15 @@ def validar_campo(nombre: str, valor: str):
 
 @router.post("/", response_model=CursoOut)
 def crear(
-    nombre: str = Form(...),
-    nivel: str = Form(...),
-    paralelo: str = Form(...),
-    turno: str = Form(...),
+    datos: CursoCreate,
     db: Session = Depends(get_db),
     payload: dict = Depends(admin_required),
 ):
-    nombre = validar_campo("nombre", nombre)
-    nivel = validar_campo("nivel", nivel)
-    paralelo = validar_campo("paralelo", paralelo)
-    turno = validar_campo("turno", turno)
-    datos = CursoCreate(nombre=nombre, nivel=nivel, paralelo=paralelo, turno=turno)
+    datos.nombre = validar_campo("nombre", datos.nombre)
+    datos.nivel = validar_campo("nivel", datos.nivel)
+    datos.paralelo = validar_campo("paralelo", datos.paralelo)
+    datos.turno = validar_campo("turno", datos.turno)
+
     return crud.crear_curso(db, datos)
 
 
@@ -61,18 +58,15 @@ def obtener(
 @router.put("/{curso_id}", response_model=CursoOut)
 def actualizar(
     curso_id: int,
-    nombre: str = Form(...),
-    nivel: str = Form(...),
-    paralelo: str = Form(...),
-    turno: str = Form(...),
+    datos: CursoUpdate,
     db: Session = Depends(get_db),
     payload: dict = Depends(admin_required),
 ):
-    nombre = validar_campo("nombre", nombre)
-    nivel = validar_campo("nivel", nivel)
-    paralelo = validar_campo("paralelo", paralelo)
-    turno = validar_campo("turno", turno)
-    datos = CursoUpdate(nombre=nombre, nivel=nivel, paralelo=paralelo, turno=turno)
+    datos.nombre = validar_campo("nombre", datos.nombre)
+    datos.nivel = validar_campo("nivel", datos.nivel)
+    datos.paralelo = validar_campo("paralelo", datos.paralelo)
+    datos.turno = validar_campo("turno", datos.turno)
+
     return crud.actualizar_curso(db, curso_id, datos)
 
 

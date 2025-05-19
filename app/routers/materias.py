@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.materia import MateriaCreate, MateriaUpdate, MateriaOut
@@ -26,15 +26,12 @@ def validar_campo(nombre: str, valor: str):
 
 @router.post("/", response_model=MateriaOut)
 def crear(
-    nombre: str = Form(...),
-    descripcion: str = Form(...),
+    datos: MateriaCreate,
     db: Session = Depends(get_db),
     payload: dict = Depends(admin_required),
 ):
-    nombre = validar_campo("nombre", nombre)
-    descripcion = validar_campo("descripcion", descripcion)
-
-    datos = MateriaCreate(nombre=nombre, descripcion=descripcion)
+    datos.nombre = validar_campo("nombre", datos.nombre)
+    datos.descripcion = validar_campo("descripcion", datos.descripcion)
     return crud.crear_materia(db, datos)
 
 
@@ -58,15 +55,12 @@ def obtener(
 @router.put("/{materia_id}", response_model=MateriaOut)
 def actualizar(
     materia_id: int,
-    nombre: str = Form(...),
-    descripcion: str = Form(...),
+    datos: MateriaUpdate,
     db: Session = Depends(get_db),
     payload: dict = Depends(admin_required),
 ):
-    nombre = validar_campo("nombre", nombre)
-    descripcion = validar_campo("descripcion", descripcion)
-
-    datos = MateriaUpdate(nombre=nombre, descripcion=descripcion)
+    datos.nombre = validar_campo("nombre", datos.nombre)
+    datos.descripcion = validar_campo("descripcion", datos.descripcion)
     return crud.actualizar_materia(db, materia_id, datos)
 
 

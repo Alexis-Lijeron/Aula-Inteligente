@@ -1,6 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from datetime import date
 from app.database import SessionLocal
 from app.schemas.inscripcion import (
     InscripcionCreate,
@@ -24,21 +23,11 @@ def get_db():
 
 @router.post("/", response_model=InscripcionOut)
 def crear(
-    descripcion: str = Form(...),
-    fecha: date = Form(...),
-    estudiante_id: int = Form(...),
-    curso_id: int = Form(...),
-    gestion_id: int = Form(...),
+    datos: InscripcionCreate,
     db: Session = Depends(get_db),
     payload: dict = Depends(admin_required),
 ):
-    datos = InscripcionCreate(
-        descripcion=descripcion.strip(),
-        fecha=fecha,
-        estudiante_id=estudiante_id,
-        curso_id=curso_id,
-        gestion_id=gestion_id,
-    )
+    datos.descripcion = datos.descripcion.strip()
     return crud.crear_inscripcion(db, datos)
 
 
@@ -62,21 +51,11 @@ def obtener(
 @router.put("/{inscripcion_id}", response_model=InscripcionOut)
 def actualizar(
     inscripcion_id: int,
-    descripcion: str = Form(...),
-    fecha: date = Form(...),
-    estudiante_id: int = Form(...),
-    curso_id: int = Form(...),
-    gestion_id: int = Form(...),
+    datos: InscripcionUpdate,
     db: Session = Depends(get_db),
     payload: dict = Depends(admin_required),
 ):
-    datos = InscripcionUpdate(
-        descripcion=descripcion.strip(),
-        fecha=fecha,
-        estudiante_id=estudiante_id,
-        curso_id=curso_id,
-        gestion_id=gestion_id,
-    )
+    datos.descripcion = datos.descripcion.strip()
     return crud.actualizar_inscripcion(db, inscripcion_id, datos)
 
 
