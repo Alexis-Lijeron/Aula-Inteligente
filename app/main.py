@@ -8,6 +8,7 @@ from app.routers import (
     docente_materia,
     cursos,
     curso_materia,
+    gestiones,
 )
 
 app = FastAPI(
@@ -32,3 +33,4 @@ app.include_router(materias.router)
 app.include_router(docente_materia.router)
 app.include_router(cursos.router)
 app.include_router(curso_materia.router)
+app.include_router(gestiones.router)
