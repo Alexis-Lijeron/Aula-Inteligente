@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import (
     estudiantes,
     docentes,
+    materias,
+    docente_materia,
 )
 
 app = FastAPI(
@@ -24,3 +26,5 @@ app.add_middleware(
 # ---------- Routers ----------
 app.include_router(estudiantes.router)
 app.include_router(docentes.router)
+app.include_router(materias.router)
+app.include_router(docente_materia.router)
