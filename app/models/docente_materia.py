@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey
+from sqlalchemy import Column, DateTime, Integer, ForeignKey, func
 from app.database import Base
 from sqlalchemy.orm import relationship
 
@@ -15,3 +15,5 @@ class DocenteMateria(Base):
     )
     docente = relationship("Docente", backref="materias_asignadas")
     materia = relationship("Materia", backref="docentes_asignados")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
