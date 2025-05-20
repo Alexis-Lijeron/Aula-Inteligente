@@ -26,7 +26,7 @@ def seed_materias(db: Session):
             "descripcion": "Desarrolla coordinación de movimientos amplios y precisos",
         },
         {
-            "nombre": "Valores y Espirseed_cursos.pyitualidad",
+            "nombre": "Valores y Espiritualidad",
             "descripcion": "Fomenta el respeto, la empatía y la diversidad espiritual desde pequeños",
         },
         # Primaria
@@ -146,3 +146,4 @@ def seed_materias(db: Session):
         if not existe:
             db.add(Materia(**mat))
     db.commit()
+    print("✅ Materia seed completado.")

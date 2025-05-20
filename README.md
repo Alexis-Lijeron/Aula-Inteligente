@@ -13,3 +13,4 @@
     docker-compose up -d
 6. Ejecutar 
     uvicorn app.main:app --reload
+7. Ejecutar seeder de manera local 

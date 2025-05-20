@@ -28,3 +28,4 @@ def seed_cursos(db: Session):
                             )
                         )
     db.commit()
+    print("✅ Curso seed completado.")
