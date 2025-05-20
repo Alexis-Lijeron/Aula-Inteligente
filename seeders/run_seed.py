@@ -4,6 +4,7 @@ from seeders.seed_materias import seed_materias
 from seeders.seed_curso_materia import seed_curso_materia
 from seeders.seed_docentes import seed_docentes
 from seeders.seed_docente_materia import seed_docente_materia
+from seeders.seed_estudiantes import seed_estudiantes
 
 
 def run():
@@ -13,8 +14,8 @@ def run():
     # seed_gestion(db)
     # seed_cursos(db)
     # seed_curso_materia(db)
-    # seed_estudiantes(db)
-    seed_docente_materia(db)
+    seed_estudiantes(db)
+    # seed_docente_materia(db)
     db.close()
 
 
