@@ -6,4 +6,4 @@ services:
     startCommand: ./start.sh
     envVars:
       - key: DATABASE_URL
-        value: postgresql://admin:agatg3qEjlkNiBZiF0f5uOhneyLVz3xz@dpg-d0l40p3uibrs73a0otr0-a.oregon-postgres.render.com/aulainteligenteia
+        value: postgresql://admin:agatg3qEjlkNiBZiF0f5uOhneyLVz3xz@dpg-d0l40p3uibrs73a0otr0-a.oregon-postgres.render.com/aulainteligenteai

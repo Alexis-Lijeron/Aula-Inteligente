@@ -3,23 +3,53 @@ from app.models.docente import Docente
 from app.models.materia import Materia
 import random
 import unicodedata
+from app.seguridad import hash_contrasena
 
 nombres_hombre = [
-    "Carlos", "Juan", "Luis", "José", "Andrés", "Mario", "Hugo", "Edgar", "Jorge", "Mauricio"
+    "Carlos",
+    "Juan",
+    "Luis",
+    "José",
+    "Andrés",
+    "Mario",
+    "Hugo",
+    "Edgar",
+    "Jorge",
+    "Mauricio",
 ]
 
 nombres_mujer = [
-    "Ana", "María", "Carla", "Paola", "Fernanda", "Lucía", "Gabriela", "Valeria", "Daniela", "Roxana"
+    "Ana",
+    "María",
+    "Carla",
+    "Paola",
+    "Fernanda",
+    "Lucía",
+    "Gabriela",
+    "Valeria",
+    "Daniela",
+    "Roxana",
 ]
 
 apellidos_bolivianos = [
-    "Condori", "Mamani", "Quispe", "Rojas", "Guzmán", "Salvatierra", "Zeballos", "Choque", "Rivera", "Alarcón"
+    "Condori",
+    "Mamani",
+    "Quispe",
+    "Rojas",
+    "Guzmán",
+    "Salvatierra",
+    "Zeballos",
+    "Choque",
+    "Rivera",
+    "Alarcón",
 ]
+
 
 def limpiar_texto(texto):
     """Quita acentos y convierte espacios a minúsculas sin tildes"""
     texto = unicodedata.normalize("NFKD", texto).encode("ASCII", "ignore").decode()
     return texto.lower().replace(" ", "")
+
 
 def generar_genero_y_nombre():
     if random.choice([True, False]):
@@ -30,6 +60,7 @@ def generar_genero_y_nombre():
         genero = "Masculino"
     return nombre, genero
 
+
 def generar_correo_unico(base, existentes):
     correo = base + "@gmail.com"
     contador = 1
@@ -39,6 +70,7 @@ def generar_correo_unico(base, existentes):
     existentes.add(correo)
     return correo
 
+
 def seed_docentes(db: Session):
     existentes = set(doc.correo for doc in db.query(Docente).all())
     nuevos = []
@@ -46,15 +78,17 @@ def seed_docentes(db: Session):
     # Admin
     admin_correo = "admin@gmail.com"
     if admin_correo not in existentes:
-        nuevos.append(Docente(
-            nombre="Admin",
-            apellido="General",
-            telefono="70000001",
-            correo=admin_correo,
-            genero="Masculino",
-            contrasena="admin",
-            is_doc=False
-        ))
+        nuevos.append(
+            Docente(
+                nombre="Admin",
+                apellido="General",
+                telefono="70000001",
+                correo=admin_correo,
+                genero="Masculino",
+                contrasena=hash_contrasena("admin"),
+                is_doc=False,
+            )
+        )
         existentes.add(admin_correo)
 
     # Docentes por materia
@@ -75,15 +109,17 @@ def seed_docentes(db: Session):
         base_correo = limpiar_texto(nombre_doc + apellido)
         correo = generar_correo_unico(base_correo, existentes)
 
-        nuevos.append(Docente(
-            nombre=nombre_doc,
-            apellido=apellido,
-            telefono=str(70000000 + len(nuevos)),
-            correo=correo,
-            genero=genero,
-            contrasena=limpiar_texto(nombre_doc),
-            is_doc=True
-        ))
+        nuevos.append(
+            Docente(
+                nombre=nombre_doc,
+                apellido=apellido,
+                telefono=str(70000000 + len(nuevos)),
+                correo=correo,
+                genero=genero,
+                contrasena=hash_contrasena(limpiar_texto(nombre_doc)),
+                is_doc=True,
+            )
+        )
 
     db.bulk_save_objects(nuevos)
     db.commit()
