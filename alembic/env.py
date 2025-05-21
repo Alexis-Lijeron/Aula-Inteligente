@@ -29,6 +29,9 @@ from app.models import (
     gestion,
     inscripcion,
     periodo,
+    evaluacion,
+    tipo_evaluacion,
+    peso_tipo_evaluacion,
 )  # importa todos tus modelos
 
 target_metadata = Base.metadata
