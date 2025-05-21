@@ -28,6 +28,7 @@ from app.models import (
     curso_materia,
     gestion,
     inscripcion,
+    periodo,
 )  # importa todos tus modelos
 
 target_metadata = Base.metadata
