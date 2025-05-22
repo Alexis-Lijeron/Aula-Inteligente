@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.schemas.estudiante import EstudianteOut, EstudianteUpdate
 from app.database import SessionLocal
 from app.crud import estudiante as crud
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required, docente_o_admin_required
 from app.cloudinary import subir_imagen_a_cloudinary
 from datetime import datetime
 
@@ -74,7 +74,7 @@ def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required
 def obtener(
     estudiante_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(admin_required),
+    payload: dict = Depends(docente_o_admin_required),
 ):
     est = crud.obtener_estudiante(db, estudiante_id)
     if not est:

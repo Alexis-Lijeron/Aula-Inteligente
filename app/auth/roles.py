@@ -1,6 +1,5 @@
 from fastapi import Depends, HTTPException
 from app.auth.auth_bearer import JWTBearer
-from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError  # type: ignore
 from app.config import settings
 

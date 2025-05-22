@@ -1,7 +1,13 @@
 from sqlalchemy.orm import Session
+from app.models.curso import Curso
+from app.models.curso_materia import CursoMateria
 from app.models.docente import Docente
+from app.models.docente_materia import DocenteMateria
+from app.models.estudiante import Estudiante
+from app.models.inscripcion import Inscripcion
+from app.models.materia import Materia
 from app.schemas.docente import DocenteCreate, DocenteUpdate
-from passlib.hash import bcrypt # type: ignore
+from passlib.hash import bcrypt  # type: ignore
 
 
 def crear_docente(db: Session, docente: DocenteCreate):
@@ -52,3 +58,60 @@ def obtener_admins(db: Session):
 
 def obtener_docente_por_id(db: Session, docente_id: int):
     return db.query(Docente).filter(Docente.id == docente_id).first()
+
+
+def obtener_materias_del_docente(db: Session, docente_id: int):
+    return (
+        db.query(Materia)
+        .join(DocenteMateria)
+        .filter(DocenteMateria.docente_id == docente_id)
+        .all()
+    )
+
+
+def obtener_cursos_del_docente(db: Session, docente_id: int):
+    return (
+        db.query(Curso)
+        .join(CursoMateria, Curso.id == CursoMateria.curso_id)
+        .join(DocenteMateria, CursoMateria.materia_id == DocenteMateria.materia_id)
+        .filter(DocenteMateria.docente_id == docente_id)
+        .distinct()
+        .all()
+    )
+
+
+def obtener_estudiantes_de_materia_curso(
+    db: Session, docente_id: int, curso_id: int, materia_id: int
+):
+    existe = (
+        db.query(DocenteMateria)
+        .filter(
+            DocenteMateria.docente_id == docente_id,
+            DocenteMateria.materia_id == materia_id,
+        )
+        .first()
+    )
+
+    if not existe:
+        return []
+
+    return (
+        db.query(Estudiante)
+        .join(Inscripcion)
+        .filter(Inscripcion.curso_id == curso_id)
+        .distinct()
+        .all()
+    )
+
+
+def obtener_materias_docente_en_curso(db: Session, docente_id: int, curso_id: int):
+    return (
+        db.query(Materia)
+        .join(DocenteMateria, DocenteMateria.materia_id == Materia.id)
+        .join(CursoMateria, CursoMateria.materia_id == Materia.id)
+        .filter(
+            DocenteMateria.docente_id == docente_id, CursoMateria.curso_id == curso_id
+        )
+        .distinct()
+        .all()
+    )

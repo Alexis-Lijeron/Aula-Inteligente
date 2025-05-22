@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
+from app.schemas.curso import CursoOut
 from app.schemas.docente import DocenteCreate, DocenteLogin, DocenteOut, DocenteUpdate
 from app.crud import docente as crud
 from app.auth.auth_handler import crear_token
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required, docente_o_admin_required
 from app.auth.auth_bearer import JWTBearer
+from app.schemas.estudiante import EstudianteOut
+from app.schemas.materia import MateriaOut
 
 router = APIRouter(prefix="/docentes", tags=["Docentes"])
 
@@ -94,3 +97,47 @@ def obtener_docente(
     if not docente:
         raise HTTPException(status_code=404, detail="Docente no encontrado")
     return docente
+
+
+@router.get("/materias-docente/{docente_id}", response_model=list[MateriaOut])
+def listar_materias_del_docente(
+    docente_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    return crud.obtener_materias_del_docente(db, docente_id)
+
+
+@router.get("/cursos-docente/{docente_id}", response_model=list[CursoOut])
+def listar_cursos_del_docente(
+    docente_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    return crud.obtener_cursos_del_docente(db, docente_id)
+
+
+@router.get(
+    "/alumnos-docente/{docente_id}/curso/{curso_id}/materia/{materia_id}",
+    response_model=list[EstudianteOut],
+)
+def listar_alumnos_de_materia_y_curso(
+    docente_id: int,
+    curso_id: int,
+    materia_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    return crud.obtener_estudiantes_de_materia_curso(
+        db, docente_id, curso_id, materia_id
+    )
+
+
+@router.get("/{docente_id}/curso/{curso_id}/materias", response_model=list[MateriaOut])
+def materias_docente_en_curso(
+    docente_id: int,
+    curso_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    return crud.obtener_materias_docente_en_curso(db, docente_id, curso_id)
