@@ -14,6 +14,7 @@ from app.routers import (
     evaluaciones,
     tipo_evaluacion,
     peso_tipo_evaluacion,
+    rendimiento_final,
 )
 
 app = FastAPI(
@@ -44,3 +45,4 @@ app.include_router(periodos.router)
 app.include_router(evaluaciones.router)
 app.include_router(tipo_evaluacion.router)
 app.include_router(peso_tipo_evaluacion.router)
+app.include_router(rendimiento_final.router)

@@ -379,3 +379,73 @@ def cuestionarios_por_estudiante_periodo(
         )
         .all()
     )
+
+#Evaluaciones por estudiante, materia, periodo y tipo
+@router.get("/por-tipo", response_model=list[EvaluacionOut])
+def ver_evaluaciones_por_tipo(
+    estudiante_id: int,
+    materia_id: int,
+    periodo_id: int,
+    tipo_evaluacion_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    return (
+        db.query(Evaluacion)
+        .filter(
+            Evaluacion.estudiante_id == estudiante_id,
+            Evaluacion.materia_id == materia_id,
+            Evaluacion.periodo_id == periodo_id,
+            Evaluacion.tipo_evaluacion_id == tipo_evaluacion_id,
+        )
+        .all()
+    )
+
+# ------------------- RESUMEN DE EVALUACIONES -------------------
+@router.get("/resumen", response_model=dict)
+def resumen_evaluaciones(
+    estudiante_id: int,
+    materia_id: int,
+    periodo_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    # 🔄 Ahora ordenado por ID
+    tipos = db.query(TipoEvaluacion).order_by(TipoEvaluacion.id).all()
+    resumen = {}
+
+    for tipo in tipos:
+        evaluaciones = (
+            db.query(Evaluacion)
+            .filter(
+                Evaluacion.estudiante_id == estudiante_id,
+                Evaluacion.materia_id == materia_id,
+                Evaluacion.periodo_id == periodo_id,
+                Evaluacion.tipo_evaluacion_id == tipo.id,
+            )
+            .all()
+        )
+
+        if not evaluaciones:
+            continue
+
+        key = str(tipo.id)
+        if tipo.nombre.lower() == "asistencia":
+            presentes = sum(1 for e in evaluaciones if e.valor >= 1)
+            porcentaje = round((presentes / len(evaluaciones)) * 100, 2)
+            resumen[key] = {
+                "id": tipo.id,
+                "nombre": tipo.nombre,
+                "porcentaje": porcentaje,
+                "total": len(evaluaciones),
+            }
+        else:
+            promedio = round(sum(e.valor for e in evaluaciones) / len(evaluaciones), 2)
+            resumen[key] = {
+                "id": tipo.id,
+                "nombre": tipo.nombre,
+                "promedio": promedio,
+                "total": len(evaluaciones),
+            }
+
+    return resumen

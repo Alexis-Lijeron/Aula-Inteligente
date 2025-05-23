@@ -32,6 +32,7 @@ from app.models import (
     evaluacion,
     tipo_evaluacion,
     peso_tipo_evaluacion,
+    rendimiento_final
 )  # importa todos tus modelos
 
 target_metadata = Base.metadata
