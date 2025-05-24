@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.evaluacion import Evaluacion
+from app.models.periodo import Periodo
 from app.schemas.evaluacion import EvaluacionCreate, EvaluacionUpdate, EvaluacionOut
 from app.crud import evaluacion as crud
 from app.auth.roles import docente_o_admin_required
@@ -462,25 +463,43 @@ estado_valores = {
 }
 
 
+def obtener_periodo_y_gestion_por_fecha(db: Session, fecha: date):
+    from app.models import Periodo
+
+    periodo = (
+        db.query(Periodo)
+        .filter(Periodo.fecha_inicio <= fecha, Periodo.fecha_fin >= fecha)
+        .first()
+    )
+
+    if not periodo:
+        raise HTTPException(
+            status_code=404,
+            detail="La fecha no coincide con ningún periodo activo en ninguna gestión",
+        )
+
+    return periodo.id, periodo.gestion_id
+
+
 @router.post("/asistencia")
 def registrar_asistencia_masiva(
     docente_id: int,
     curso_id: int,
     materia_id: int,
-    periodo_id: int,
     fecha: date,
     estudiantes: list[dict],
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
+    periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
     registros = []
     for est in estudiantes:
         est_id = est["id"]
         estado = est["estado"].lower()
+
         if estado not in estado_valores:
             raise HTTPException(status_code=400, detail=f"Estado inválido: {estado}")
 
-        # Verificar si ya existe una evaluación de asistencia ese día
         existente = (
             db.query(Evaluacion)
             .filter_by(
@@ -502,13 +521,18 @@ def registrar_asistencia_masiva(
             valor=valor,
             estudiante_id=est_id,
             materia_id=materia_id,
-            tipo_evaluacion_id=5,  # Asistencia
+            tipo_evaluacion_id=5,
             periodo_id=periodo_id,
         )
         db.add(evaluacion)
         registros.append(est_id)
+
     db.commit()
-    return {"mensaje": f"Asistencia registrada para estudiantes: {registros}"}
+    return {
+        "mensaje": f"Asistencia registrada para estudiantes: {registros}",
+        "periodo_id": periodo_id,
+        "gestion_id": gestion_id,
+    }
 
 
 @router.post("/participacion")
@@ -516,19 +540,17 @@ def registrar_participacion_masiva(
     docente_id: int,
     curso_id: int,
     materia_id: int,
-    periodo_id: int,
     fecha: date,
     estudiantes: list[dict],
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
+    periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
     registros = []
     for est in estudiantes:
         est_id = est["id"]
         valor = est["valor"]
-        descripcion = est.get(
-            "descripcion", "Participación"
-        )  # Si no se da, usa por defecto
+        descripcion = est.get("descripcion", "Participación")
 
         if not (0 <= valor <= 100):
             raise HTTPException(
@@ -549,4 +571,8 @@ def registrar_participacion_masiva(
         registros.append(est_id)
 
     db.commit()
-    return {"mensaje": f"Participaciones registradas para estudiantes: {registros}"}
+    return {
+        "mensaje": f"Participaciones registradas para estudiantes: {registros}",
+        "periodo_id": periodo_id,
+        "gestion_id": gestion_id,
+    }
