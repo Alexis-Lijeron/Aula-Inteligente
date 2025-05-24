@@ -531,17 +531,6 @@ def registrar_participacion_masiva(
         if not (0 <= valor <= 100):
             raise HTTPException(status_code=400, detail=f"Valor inválido para estudiante {est_id}: {valor}")
 
-        # Evitar duplicados
-        existente = db.query(Evaluacion).filter_by(
-            estudiante_id=est_id,
-            materia_id=materia_id,
-            periodo_id=periodo_id,
-            fecha=fecha,
-            tipo_evaluacion_id=4  # Participaciones
-        ).first()
-        if existente:
-            continue
-
         evaluacion = Evaluacion(
             fecha=fecha,
             descripcion="Participación",
