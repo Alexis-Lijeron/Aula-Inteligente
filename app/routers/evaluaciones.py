@@ -525,20 +525,25 @@ def registrar_participacion_masiva(
     registros = []
     for est in estudiantes:
         est_id = est["id"]
-        valor = est["valor"]  # ← ahora usamos "valor"
+        valor = est["valor"]
+        descripcion = est.get(
+            "descripcion", "Participación"
+        )  # Si no se da, usa por defecto
 
-        # Validación opcional del valor
         if not (0 <= valor <= 100):
-            raise HTTPException(status_code=400, detail=f"Valor inválido para estudiante {est_id}: {valor}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Valor inválido para estudiante {est_id}: {valor}",
+            )
 
         evaluacion = Evaluacion(
             fecha=fecha,
-            descripcion="Participación",
+            descripcion=descripcion,
             valor=valor,
             estudiante_id=est_id,
             materia_id=materia_id,
-            tipo_evaluacion_id=4,
-            periodo_id=periodo_id
+            tipo_evaluacion_id=4,  # Participación
+            periodo_id=periodo_id,
         )
         db.add(evaluacion)
         registros.append(est_id)
