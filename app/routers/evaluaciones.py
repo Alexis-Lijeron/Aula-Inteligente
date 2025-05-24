@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
@@ -380,7 +381,8 @@ def cuestionarios_por_estudiante_periodo(
         .all()
     )
 
-#Evaluaciones por estudiante, materia, periodo y tipo
+
+# Evaluaciones por estudiante, materia, periodo y tipo
 @router.get("/por-tipo", response_model=list[EvaluacionOut])
 def ver_evaluaciones_por_tipo(
     estudiante_id: int,
@@ -400,6 +402,7 @@ def ver_evaluaciones_por_tipo(
         )
         .all()
     )
+
 
 # ------------------- RESUMEN DE EVALUACIONES -------------------
 @router.get("/resumen", response_model=dict)
@@ -449,3 +452,107 @@ def resumen_evaluaciones(
             }
 
     return resumen
+
+
+estado_valores = {
+    "presente": (100, "Asistencia"),
+    "falta": (0, "Falta injustificada"),
+    "tarde": (50, "Llegó tarde"),
+    "justificacion": (50, "Licencia médica"),
+}
+
+
+@router.post("/asistencia")
+def registrar_asistencia_masiva(
+    docente_id: int,
+    curso_id: int,
+    materia_id: int,
+    periodo_id: int,
+    fecha: date,
+    estudiantes: list[dict],
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    registros = []
+    for est in estudiantes:
+        est_id = est["id"]
+        estado = est["estado"].lower()
+        if estado not in estado_valores:
+            raise HTTPException(status_code=400, detail=f"Estado inválido: {estado}")
+
+        # Verificar si ya existe una evaluación de asistencia ese día
+        existente = (
+            db.query(Evaluacion)
+            .filter_by(
+                estudiante_id=est_id,
+                materia_id=materia_id,
+                periodo_id=periodo_id,
+                fecha=fecha,
+                tipo_evaluacion_id=5,
+            )
+            .first()
+        )
+        if existente:
+            continue
+
+        valor, descripcion = estado_valores[estado]
+        evaluacion = Evaluacion(
+            fecha=fecha,
+            descripcion=descripcion,
+            valor=valor,
+            estudiante_id=est_id,
+            materia_id=materia_id,
+            tipo_evaluacion_id=5,  # Asistencia
+            periodo_id=periodo_id,
+        )
+        db.add(evaluacion)
+        registros.append(est_id)
+    db.commit()
+    return {"mensaje": f"Asistencia registrada para estudiantes: {registros}"}
+
+
+@router.post("/participacion")
+def registrar_participacion_masiva(
+    docente_id: int,
+    curso_id: int,
+    materia_id: int,
+    periodo_id: int,
+    fecha: date,
+    estudiantes: list[dict],
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    registros = []
+    for est in estudiantes:
+        est_id = est["id"]
+        valor = est["valor"]  # ← ahora usamos "valor"
+
+        # Validación opcional del valor
+        if not (0 <= valor <= 100):
+            raise HTTPException(status_code=400, detail=f"Valor inválido para estudiante {est_id}: {valor}")
+
+        # Evitar duplicados
+        existente = db.query(Evaluacion).filter_by(
+            estudiante_id=est_id,
+            materia_id=materia_id,
+            periodo_id=periodo_id,
+            fecha=fecha,
+            tipo_evaluacion_id=4  # Participaciones
+        ).first()
+        if existente:
+            continue
+
+        evaluacion = Evaluacion(
+            fecha=fecha,
+            descripcion="Participación",
+            valor=valor,
+            estudiante_id=est_id,
+            materia_id=materia_id,
+            tipo_evaluacion_id=4,
+            periodo_id=periodo_id
+        )
+        db.add(evaluacion)
+        registros.append(est_id)
+
+    db.commit()
+    return {"mensaje": f"Participaciones registradas para estudiantes: {registros}"}
