@@ -1,6 +1,10 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 
+from app.schemas.curso import CursoOut
+from app.schemas.estudiante import EstudianteOut
+from app.schemas.materia import MateriaOut
+
 
 class DocenteBase(BaseModel):
     nombre: str
@@ -33,3 +37,12 @@ class DocenteUpdate(BaseModel):
     telefono: Optional[str]
     genero: Optional[str]
     is_doc: Optional[bool]
+
+
+class EstudianteAsignadoDetalle(BaseModel):
+    estudiante: EstudianteOut
+    curso: CursoOut
+    materia: MateriaOut
+
+    class Config:
+        from_attributes = True

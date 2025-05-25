@@ -115,3 +115,35 @@ def obtener_materias_docente_en_curso(db: Session, docente_id: int, curso_id: in
         .distinct()
         .all()
     )
+
+
+def obtener_estudiantes_de_docente(
+    db: Session,
+    docente_id: int,
+    curso_id: int = None,
+    materia_id: int = None,
+    nombre: str = None,
+):
+    query = (
+        db.query(Estudiante, Curso, Materia)
+        .join(Inscripcion, Inscripcion.estudiante_id == Estudiante.id)
+        .join(Curso, Curso.id == Inscripcion.curso_id)
+        .join(CursoMateria, CursoMateria.curso_id == Curso.id)
+        .join(Materia, Materia.id == CursoMateria.materia_id)
+        .join(DocenteMateria, DocenteMateria.materia_id == Materia.id)
+        .filter(DocenteMateria.docente_id == docente_id)
+    )
+
+    if curso_id:
+        query = query.filter(Curso.id == curso_id)
+    if materia_id:
+        query = query.filter(Materia.id == materia_id)
+    if nombre:
+        query = query.filter(Estudiante.nombre.ilike(f"%{nombre}%"))
+
+    resultados = query.all()
+
+    return [
+        {"estudiante": estudiante, "curso": curso, "materia": materia}
+        for estudiante, curso, materia in resultados
+    ]

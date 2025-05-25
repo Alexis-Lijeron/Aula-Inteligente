@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.curso import CursoOut
-from app.schemas.docente import DocenteCreate, DocenteLogin, DocenteOut, DocenteUpdate
+from app.schemas.docente import DocenteCreate, DocenteLogin, DocenteOut, DocenteUpdate, EstudianteAsignadoDetalle
 from app.crud import docente as crud
 from app.auth.auth_handler import crear_token
 from app.auth.roles import admin_required, docente_o_admin_required
@@ -141,3 +141,17 @@ def materias_docente_en_curso(
     payload: dict = Depends(docente_o_admin_required),
 ):
     return crud.obtener_materias_docente_en_curso(db, docente_id, curso_id)
+
+
+@router.get("/alumnos-asignados/{docente_id}", response_model=list[EstudianteAsignadoDetalle])
+def listar_estudiantes_asignados_a_docente(
+    docente_id: int,
+    curso_id: int = None,
+    materia_id: int = None,
+    nombre: str = None,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    return crud.obtener_estudiantes_de_docente(
+        db, docente_id, curso_id=curso_id, materia_id=materia_id, nombre=nombre
+    )
