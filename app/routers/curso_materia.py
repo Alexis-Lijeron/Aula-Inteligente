@@ -6,9 +6,10 @@ from app.schemas.curso_materia import (
     CursoMateriaUpdate,
     CursoMateriaOut,
     CursoMateriaDetalle,
+    MateriaConCurso,
 )
 from app.crud import curso_materia as crud
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required, docente_o_admin_required
 
 router = APIRouter(prefix="/curso-materia", tags=["CursoMateria"])
 
@@ -90,3 +91,12 @@ def cursos_por_materia(
     payload: dict = Depends(admin_required),
 ):
     return crud.listar_cursos_por_materia(db, materia_id)
+
+
+@router.get("/materias-docente/{docente_id}", response_model=list[MateriaConCurso])
+def materias_con_curso_por_docente(
+    docente_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    return crud.listar_materias_con_curso_por_docente(db, docente_id)

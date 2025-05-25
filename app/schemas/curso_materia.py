@@ -31,3 +31,17 @@ class CursoMateriaDetalle(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MateriaConCurso(BaseModel):
+    curso_id: int
+    curso_nombre: str
+    curso_nivel: str
+    curso_paralelo: str
+    curso_turno: str
+    materia_id: int
+    materia_nombre: str
+    materia_descripcion: str
+
+    class Config:
+        from_attributes = True
