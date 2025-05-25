@@ -2,7 +2,9 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
+from app.models.estudiante import Estudiante
 from app.models.evaluacion import Evaluacion
+from app.models.inscripcion import Inscripcion
 from app.models.periodo import Periodo
 from app.schemas.evaluacion import EvaluacionCreate, EvaluacionUpdate, EvaluacionOut
 from app.crud import evaluacion as crud
@@ -575,4 +577,160 @@ def registrar_participacion_masiva(
         "mensaje": f"Participaciones registradas para estudiantes: {registros}",
         "periodo_id": periodo_id,
         "gestion_id": gestion_id,
+    }
+
+
+@router.get("/asistencia/masiva")
+def obtener_asistencias_masiva(
+    fecha: date,
+    curso_id: int,
+    materia_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
+
+    asistencias = (
+        db.query(Evaluacion)
+        .join(Estudiante)
+        .join(Inscripcion)
+        .filter(
+            Evaluacion.fecha == fecha,
+            Evaluacion.materia_id == materia_id,
+            Evaluacion.tipo_evaluacion_id == 5,  # Asistencia
+            Evaluacion.periodo_id == periodo_id,
+            Inscripcion.curso_id == curso_id,
+            Inscripcion.estudiante_id == Evaluacion.estudiante_id,
+        )
+        .all()
+    )
+
+    return {
+        "fecha": fecha,
+        "periodo_id": periodo_id,
+        "gestion_id": gestion_id,
+        "asistencias": [e.__dict__ for e in asistencias],
+    }
+
+
+@router.get("/participacion/masiva")
+def obtener_participaciones_masiva(
+    fecha: date,
+    curso_id: int,
+    materia_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
+
+    participaciones = (
+        db.query(Evaluacion)
+        .join(Estudiante)
+        .join(Inscripcion)
+        .filter(
+            Evaluacion.fecha == fecha,
+            Evaluacion.materia_id == materia_id,
+            Evaluacion.tipo_evaluacion_id == 4,  # Participación
+            Evaluacion.periodo_id == periodo_id,
+            Inscripcion.curso_id == curso_id,
+            Inscripcion.estudiante_id == Evaluacion.estudiante_id,
+        )
+        .all()
+    )
+
+    return {
+        "fecha": fecha,
+        "periodo_id": periodo_id,
+        "gestion_id": gestion_id,
+        "participaciones": [e.__dict__ for e in participaciones],
+    }
+
+
+@router.get("/evaluacion/masiva")
+def obtener_evaluaciones_por_tipo(
+    fecha: date,
+    curso_id: int,
+    materia_id: int,
+    tipo_evaluacion_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
+
+    evaluaciones = (
+        db.query(Evaluacion)
+        .join(Estudiante)
+        .join(Inscripcion)
+        .filter(
+            Evaluacion.fecha == fecha,
+            Evaluacion.materia_id == materia_id,
+            Evaluacion.tipo_evaluacion_id == tipo_evaluacion_id,
+            Evaluacion.periodo_id == periodo_id,
+            Inscripcion.curso_id == curso_id,
+            Inscripcion.estudiante_id == Evaluacion.estudiante_id,
+        )
+        .all()
+    )
+
+    return {
+        "fecha": fecha,
+        "tipo_evaluacion_id": tipo_evaluacion_id,
+        "periodo_id": periodo_id,
+        "gestion_id": gestion_id,
+        "evaluaciones": [e.__dict__ for e in evaluaciones],
+    }
+
+
+@router.post("/evaluaciones/registrar/masiva")
+def registrar_evaluaciones_masiva(
+    tipo_evaluacion_id: int,
+    materia_id: int,
+    fecha: date,
+    estudiantes: list[dict],  # [{"id": 1, "valor": 85, "descripcion": "opcional"}]
+    descripcion_general: str = None,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+
+    # Obtener periodo y gestión
+    periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
+
+    # Verificar tipo de evaluación
+    tipo = db.query(TipoEvaluacion).filter_by(id=tipo_evaluacion_id).first()
+    if not tipo:
+        raise HTTPException(status_code=404, detail="Tipo de evaluación no encontrado")
+
+    tipo_nombre = tipo.nombre
+    registros = []
+
+    for est in estudiantes:
+        est_id = est["id"]
+        valor = est["valor"]
+
+        if not (0 <= valor <= 100):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Valor inválido para estudiante {est_id}: {valor}",
+            )
+
+        descripcion = est.get("descripcion") or descripcion_general or tipo_nombre
+
+        evaluacion = Evaluacion(
+            fecha=fecha,
+            descripcion=descripcion,
+            valor=valor,
+            estudiante_id=est_id,
+            materia_id=materia_id,
+            tipo_evaluacion_id=tipo_evaluacion_id,
+            periodo_id=periodo_id,
+        )
+        db.add(evaluacion)
+        registros.append(est_id)
+
+    db.commit()
+    return {
+        "mensaje": f"Evaluaciones '{tipo_nombre}' registradas para estudiantes: {registros}",
+        "periodo_id": periodo_id,
+        "gestion_id": gestion_id,
+        "tipo_evaluacion": tipo_nombre,
     }
