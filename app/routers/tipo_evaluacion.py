@@ -7,7 +7,7 @@ from app.schemas.tipo_evaluacion import (
     TipoEvaluacionOut,
 )
 from app.crud import tipo_evaluacion as crud
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required, docente_o_admin_required
 
 router = APIRouter(prefix="/tipo-evaluacion", tags=["TipoEvaluacion"])
 
@@ -30,13 +30,13 @@ def crear(
 
 
 @router.get("/", response_model=list[TipoEvaluacionOut])
-def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required)):
+def listar(db: Session = Depends(get_db), payload: dict = Depends(docente_o_admin_required)):
     return crud.listar_tipos(db)
 
 
 @router.get("/{tipo_id}", response_model=TipoEvaluacionOut)
 def obtener(
-    tipo_id: int, db: Session = Depends(get_db), payload: dict = Depends(admin_required)
+    tipo_id: int, db: Session = Depends(get_db), payload: dict = Depends(docente_o_admin_required)
 ):
     tipo = crud.obtener_por_id(db, tipo_id)
     if not tipo:

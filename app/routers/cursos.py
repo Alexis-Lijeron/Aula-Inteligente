@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.curso import CursoCreate, CursoUpdate, CursoOut
 from app.crud import curso as crud
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required,docente_o_admin_required
 
 router = APIRouter(prefix="/cursos", tags=["Cursos"])
 
@@ -47,7 +47,7 @@ def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required
 def obtener(
     curso_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(admin_required),
+    payload: dict = Depends(docente_o_admin_required),
 ):
     curso = crud.obtener_curso_por_id(db, curso_id)
     if not curso:

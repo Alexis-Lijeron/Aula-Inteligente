@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.gestion import GestionCreate, GestionUpdate, GestionOut
 from app.crud import gestion as crud
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required, docente_o_admin_required
 
 router = APIRouter(prefix="/gestiones", tags=["Gestiones"])
 
@@ -36,7 +36,7 @@ def crear(
 
 
 @router.get("/", response_model=list[GestionOut])
-def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required)):
+def listar(db: Session = Depends(get_db), payload: dict = Depends(docente_o_admin_required)):
     return crud.listar_gestiones(db)
 
 
@@ -44,7 +44,7 @@ def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required
 def obtener(
     gestion_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(admin_required),
+    payload: dict = Depends(docente_o_admin_required),
 ):
     g = crud.obtener_gestion_por_id(db, gestion_id)
     if not g:

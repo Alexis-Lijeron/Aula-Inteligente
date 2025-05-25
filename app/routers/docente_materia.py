@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.docente_materia import AsignacionCreate, AsignacionOut
 from app.crud import docente_materia as crud
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required, docente_o_admin_required
 from app.schemas.docente_materia import MateriaAsignada, DocenteAsignado
 
 router = APIRouter(prefix="/asignaciones", tags=["Asignaciones Docente-Materia"])
@@ -27,7 +27,7 @@ def asignar(
 
 
 @router.get("/", response_model=list[AsignacionOut])
-def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required)):
+def listar(db: Session = Depends(get_db), payload: dict = Depends(docente_o_admin_required)):
     return crud.obtener_asignaciones(db)
 
 
@@ -47,7 +47,7 @@ def eliminar(
 def materias_por_docente(
     docente_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(admin_required),
+    payload: dict = Depends(docente_o_admin_required),
 ):
     asignaciones = crud.obtener_materias_por_docente(db, docente_id)
     return asignaciones
@@ -57,7 +57,7 @@ def materias_por_docente(
 def docentes_por_materia(
     materia_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(admin_required),
+    payload: dict = Depends(docente_o_admin_required),
 ):
     asignaciones = crud.obtener_docentes_por_materia(db, materia_id)
     return asignaciones

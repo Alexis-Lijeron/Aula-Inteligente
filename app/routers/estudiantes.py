@@ -66,7 +66,7 @@ def crear(
 
 
 @router.get("/", response_model=list[EstudianteOut])
-def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required)):
+def listar(db: Session = Depends(get_db), payload: dict = Depends(docente_o_admin_required)):
     return crud.obtener_estudiantes(db)
 
 

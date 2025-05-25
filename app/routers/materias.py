@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.materia import MateriaCreate, MateriaUpdate, MateriaOut
 from app.crud import materia as crud
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required, docente_o_admin_required
 
 router = APIRouter(prefix="/materias", tags=["Materias"])
 
@@ -44,7 +44,7 @@ def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required
 def obtener(
     materia_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(admin_required),
+    payload: dict = Depends(docente_o_admin_required),
 ):
     materia = crud.obtener_materia_por_id(db, materia_id)
     if not materia:

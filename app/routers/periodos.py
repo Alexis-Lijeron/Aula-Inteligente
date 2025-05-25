@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.periodo import PeriodoCreate, PeriodoUpdate, PeriodoOut
 from app.crud import periodo as crud
-from app.auth.roles import admin_required
+from app.auth.roles import admin_required, docente_o_admin_required
 
 router = APIRouter(prefix="/periodos", tags=["Periodos"])
 
@@ -26,7 +26,7 @@ def crear(
 
 
 @router.get("/", response_model=list[PeriodoOut])
-def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required)):
+def listar(db: Session = Depends(get_db), payload: dict = Depends(docente_o_admin_required)):
     return crud.listar_periodos(db)
 
 
@@ -34,7 +34,7 @@ def listar(db: Session = Depends(get_db), payload: dict = Depends(admin_required
 def obtener(
     periodo_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(admin_required),
+    payload: dict = Depends(docente_o_admin_required),
 ):
     p = crud.obtener_por_id(db, periodo_id)
     if not p:
@@ -71,13 +71,13 @@ def eliminar(
 def listar_por_gestion(
     gestion_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(admin_required),
+    payload: dict = Depends(docente_o_admin_required),
 ):
     return crud.listar_por_gestion(db, gestion_id)
 
 
 @router.get("/buscar-por-nombre/", response_model=list[PeriodoOut])
 def buscar(
-    nombre: str, db: Session = Depends(get_db), payload: dict = Depends(admin_required)
+    nombre: str, db: Session = Depends(get_db), payload: dict = Depends(docente_o_admin_required)
 ):
     return crud.buscar_por_nombre(db, nombre)
