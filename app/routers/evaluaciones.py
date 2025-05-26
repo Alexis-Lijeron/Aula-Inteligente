@@ -408,15 +408,19 @@ def ver_evaluaciones_por_tipo(
 
 
 # ------------------- RESUMEN DE EVALUACIONES -------------------
-@router.get("/resumen", response_model=dict)
-def resumen_evaluaciones(
+from datetime import date
+
+
+@router.get("/resumen/por-estudiante", response_model=dict)
+def resumen_evaluaciones_auto_periodo(
     estudiante_id: int,
     materia_id: int,
-    periodo_id: int,
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
-    # 🔄 Ahora ordenado por ID
+    fecha_actual = date.today()
+    periodo_id, _ = obtener_periodo_y_gestion_por_fecha(db, fecha_actual)
+
     tipos = db.query(TipoEvaluacion).order_by(TipoEvaluacion.id).all()
     resumen = {}
 
@@ -436,6 +440,15 @@ def resumen_evaluaciones(
             continue
 
         key = str(tipo.id)
+        detalle = [
+            {
+                "fecha": e.fecha.isoformat(),
+                "descripcion": e.descripcion,
+                "valor": e.valor,
+            }
+            for e in evaluaciones
+        ]
+
         if tipo.nombre.lower() == "asistencia":
             presentes = sum(1 for e in evaluaciones if e.valor >= 1)
             porcentaje = round((presentes / len(evaluaciones)) * 100, 2)
@@ -444,6 +457,7 @@ def resumen_evaluaciones(
                 "nombre": tipo.nombre,
                 "porcentaje": porcentaje,
                 "total": len(evaluaciones),
+                "detalle": detalle,
             }
         else:
             promedio = round(sum(e.valor for e in evaluaciones) / len(evaluaciones), 2)
@@ -452,9 +466,14 @@ def resumen_evaluaciones(
                 "nombre": tipo.nombre,
                 "promedio": promedio,
                 "total": len(evaluaciones),
+                "detalle": detalle,
             }
 
-    return resumen
+    return {
+        "fecha": fecha_actual.isoformat(),
+        "periodo_id": periodo_id,
+        "resumen": resumen,
+    }
 
 
 estado_valores = {
