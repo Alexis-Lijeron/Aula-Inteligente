@@ -753,3 +753,64 @@ def registrar_evaluaciones_masiva(
         "gestion_id": gestion_id,
         "tipo_evaluacion": tipo_nombre,
     }
+    
+@router.get("/resumen/por-estudiante-periodo", response_model=dict)
+def resumen_evaluaciones_por_estudiante_y_periodo(
+    estudiante_id: int,
+    materia_id: int,
+    periodo_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    tipos = db.query(TipoEvaluacion).order_by(TipoEvaluacion.id).all()
+    resumen = {}
+
+    for tipo in tipos:
+        evaluaciones = (
+            db.query(Evaluacion)
+            .filter(
+                Evaluacion.estudiante_id == estudiante_id,
+                Evaluacion.materia_id == materia_id,
+                Evaluacion.periodo_id == periodo_id,
+                Evaluacion.tipo_evaluacion_id == tipo.id,
+            )
+            .all()
+        )
+
+        if not evaluaciones:
+            continue
+
+        key = str(tipo.id)
+        detalle = [
+            {
+                "fecha": e.fecha.isoformat(),
+                "descripcion": e.descripcion,
+                "valor": e.valor,
+            }
+            for e in evaluaciones
+        ]
+
+        if tipo.nombre.lower() == "asistencia":
+            presentes = sum(1 for e in evaluaciones if e.valor >= 1)
+            porcentaje = round((presentes / len(evaluaciones)) * 100, 2)
+            resumen[key] = {
+                "id": tipo.id,
+                "nombre": tipo.nombre,
+                "porcentaje": porcentaje,
+                "total": len(evaluaciones),
+                "detalle": detalle,
+            }
+        else:
+            promedio = round(sum(e.valor for e in evaluaciones) / len(evaluaciones), 2)
+            resumen[key] = {
+                "id": tipo.id,
+                "nombre": tipo.nombre,
+                "promedio": promedio,
+                "total": len(evaluaciones),
+                "detalle": detalle,
+            }
+
+    return {
+        "periodo_id": periodo_id,
+        "resumen": resumen,
+    }
