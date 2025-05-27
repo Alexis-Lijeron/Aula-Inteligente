@@ -815,7 +815,7 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
         "resumen": resumen,
     }
     
-@router.get("/resumen/por-estudiante-periodo", response_model=dict)
+@router.get("/resumen/por-estudiante-periodo-total", response_model=dict)
 def resumen_evaluaciones_por_estudiante_y_periodo(
     estudiante_id: int,
     materia_id: int,
