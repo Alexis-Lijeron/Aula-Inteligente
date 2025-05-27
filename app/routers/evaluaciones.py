@@ -815,7 +815,7 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
         "resumen": resumen,
     }
     
-@router.get("/resumen/por-estudiante-periodo-total", response_model=dict)
+@router.get("/resumen/por-estudiante-periodo", response_model=dict)
 def resumen_evaluaciones_por_estudiante_y_periodo(
     estudiante_id: int,
     materia_id: int,
@@ -824,9 +824,9 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
-    from app.models import Periodo, PesoTipoEvaluacion  # importa si aún no está
+    from app.models import Periodo, PesoTipoEvaluacion
 
-    # Obtener la gestión a la que pertenece el periodo
+    # Obtener la gestión a partir del periodo
     periodo = db.query(Periodo).filter_by(id=periodo_id).first()
     if not periodo:
         raise HTTPException(status_code=404, detail="Periodo no encontrado")
@@ -853,22 +853,18 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
         if not evaluaciones:
             continue
 
-        # Buscar el peso configurado para este tipo
-        peso = (
-            db.query(PesoTipoEvaluacion)
-            .filter_by(
-                docente_id=docente_id,
-                materia_id=materia_id,
-                gestion_id=gestion_id,
-                tipo_id=tipo.id,
-            )
-            .first()
-        )
+        # ✅ Corregido: usamos tipo_evaluacion_id
+        peso = db.query(PesoTipoEvaluacion).filter(
+            PesoTipoEvaluacion.docente_id == docente_id,
+            PesoTipoEvaluacion.materia_id == materia_id,
+            PesoTipoEvaluacion.gestion_id == gestion_id,
+            PesoTipoEvaluacion.tipo_evaluacion_id == tipo.id
+        ).first()
 
         if not peso:
-            continue  # si no hay peso definido, se ignora
+            continue  # si no hay peso definido, lo omitimos
 
-        puntos_tipo = peso.puntos
+        puntos_tipo = peso.porcentaje
         key = str(tipo.id)
 
         detalle = [
@@ -893,7 +889,7 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
             }
         else:
             promedio = round(sum(e.valor for e in evaluaciones) / len(evaluaciones), 2)
-            ponderado = promedio * (puntos_tipo / 100)  # nota proporcional
+            ponderado = promedio * (puntos_tipo / 100)
             total_ponderado += ponderado
             total_puntos += puntos_tipo
 
