@@ -814,3 +814,103 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
         "periodo_id": periodo_id,
         "resumen": resumen,
     }
+    
+@router.get("/resumen/por-estudiante-periodo-total", response_model=dict)
+def resumen_evaluaciones_por_estudiante_y_periodo(
+    estudiante_id: int,
+    materia_id: int,
+    periodo_id: int,
+    docente_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    from app.models import Periodo, PesoTipoEvaluacion  # importa si aún no está
+
+    # Obtener la gestión a la que pertenece el periodo
+    periodo = db.query(Periodo).filter_by(id=periodo_id).first()
+    if not periodo:
+        raise HTTPException(status_code=404, detail="Periodo no encontrado")
+
+    gestion_id = periodo.gestion_id
+
+    tipos = db.query(TipoEvaluacion).order_by(TipoEvaluacion.id).all()
+    resumen = {}
+    total_ponderado = 0
+    total_puntos = 0
+
+    for tipo in tipos:
+        evaluaciones = (
+            db.query(Evaluacion)
+            .filter(
+                Evaluacion.estudiante_id == estudiante_id,
+                Evaluacion.materia_id == materia_id,
+                Evaluacion.periodo_id == periodo_id,
+                Evaluacion.tipo_evaluacion_id == tipo.id,
+            )
+            .all()
+        )
+
+        if not evaluaciones:
+            continue
+
+        # Buscar el peso configurado para este tipo
+        peso = (
+            db.query(PesoTipoEvaluacion)
+            .filter_by(
+                docente_id=docente_id,
+                materia_id=materia_id,
+                gestion_id=gestion_id,
+                tipo_id=tipo.id,
+            )
+            .first()
+        )
+
+        if not peso:
+            continue  # si no hay peso definido, se ignora
+
+        puntos_tipo = peso.puntos
+        key = str(tipo.id)
+
+        detalle = [
+            {
+                "fecha": e.fecha.isoformat(),
+                "descripcion": e.descripcion,
+                "valor": e.valor,
+            }
+            for e in evaluaciones
+        ]
+
+        if tipo.nombre.lower() == "asistencia":
+            presentes = sum(1 for e in evaluaciones if e.valor >= 1)
+            porcentaje = round((presentes / len(evaluaciones)) * 100, 2)
+            resumen[key] = {
+                "id": tipo.id,
+                "nombre": tipo.nombre,
+                "porcentaje": porcentaje,
+                "total": len(evaluaciones),
+                "detalle": detalle,
+                "puntos": puntos_tipo
+            }
+        else:
+            promedio = round(sum(e.valor for e in evaluaciones) / len(evaluaciones), 2)
+            ponderado = promedio * (puntos_tipo / 100)  # nota proporcional
+            total_ponderado += ponderado
+            total_puntos += puntos_tipo
+
+            resumen[key] = {
+                "id": tipo.id,
+                "nombre": tipo.nombre,
+                "promedio": promedio,
+                "total": len(evaluaciones),
+                "detalle": detalle,
+                "puntos": puntos_tipo
+            }
+
+    promedio_general = round((total_ponderado / total_puntos) * 100, 2) if total_puntos > 0 else 0.0
+
+    return {
+        "periodo_id": periodo_id,
+        "gestion_id": gestion_id,
+        "promedio_general": promedio_general,
+        "resumen": resumen,
+    }
