@@ -9,7 +9,7 @@ from seeders.seed_inscripciones import seed_inscripciones
 from seeders.seed_gestion import seed_gestion
 from seeders.seed_periodos import seed_periodos
 from seeders.seed_tipo_evaluacion import seed_tipo_evaluacion
-
+from seeders.seed_evaluaciones_completo import seed_evaluaciones
 
 def run():
     db = SessionLocal()
@@ -22,7 +22,8 @@ def run():
     #seed_estudiantes(db)
     #seed_inscripciones(db)
     #seed_periodos(db)
-    seed_tipo_evaluacion(db)
+    #seed_tipo_evaluacion(db)
+    seed_evaluaciones(db)
     print("✅ Todos los datos de prueba se han insertado correctamente.")
     db.close()
 
