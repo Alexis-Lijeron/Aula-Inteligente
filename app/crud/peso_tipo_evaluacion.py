@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from app import models
 from app.models.peso_tipo_evaluacion import PesoTipoEvaluacion
 from app.schemas.peso_tipo_evaluacion import (
     PesoTipoEvaluacionCreate,
@@ -86,3 +87,10 @@ def listar_por_docente_gestion(db: Session, docente_id: int, gestion_id: int):
         .all()
     )
 
+
+def listar_por_docente(db: Session, docente_id: int):
+    return (
+        db.query(models.PesoTipoEvaluacion)
+        .filter(models.PesoTipoEvaluacion.docente_id == docente_id)
+        .all()
+    )

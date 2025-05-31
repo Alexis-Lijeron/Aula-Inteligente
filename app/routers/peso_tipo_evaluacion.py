@@ -114,3 +114,12 @@ def listar_por_docente_gestion(
     payload: dict = Depends(docente_o_admin_required),
 ):
     return crud.listar_por_docente_gestion(db, docente_id, gestion_id)
+
+
+@router.get("/por-docente/{docente_id}", response_model=list[PesoTipoEvaluacionOut])
+def listar_pesos_por_docente(
+    docente_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    return crud.listar_por_docente(db, docente_id)
