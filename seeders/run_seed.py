@@ -25,8 +25,9 @@ def run():
     # seed_inscripciones(db)
     # seed_periodos(db)
     # seed_tipo_evaluacion(db)
-    # seed_evaluaciones(db)
-    seed_peso_tipo_evaluacion(db)
+    # seed_peso_tipo_evaluacion(db)
+    periodo_id = 3
+    seed_evaluaciones(db, periodo_id)
     print("✅ Todos los datos de prueba se han insertado correctamente.")
     db.close()
 

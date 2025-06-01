@@ -9,175 +9,170 @@ from app.models import (
     TipoEvaluacion,
     Evaluacion,
 )
-from datetime import timedelta, date
+from datetime import timedelta
 import random
 
 
-def seed_evaluaciones(db: Session):
+def seed_evaluaciones(db: Session, periodo_id: int):
+    periodo = db.query(Periodo).filter_by(id=periodo_id).first()
+    if not periodo:
+        print(f"❌ No se encontró el periodo con id {periodo_id}")
+        return
+
+    print(f"🟡 Generando evaluaciones para el periodo: {periodo.nombre}")
+
     estudiantes = db.query(Estudiante).all()
-    cursos = db.query(Curso).all()
     inscripciones = db.query(Inscripcion).all()
     cursomaterias = db.query(CursoMateria).all()
-    docentematerias = db.query(DocenteMateria).all()
-    periodos = db.query(Periodo).all()
     tipos = db.query(TipoEvaluacion).all()
 
     tipo_dict = {t.nombre.lower(): t.id for t in tipos}
+    fechas = [
+        periodo.fecha_inicio + timedelta(days=i)
+        for i in range((periodo.fecha_fin - periodo.fecha_inicio).days + 1)
+    ]
+    fechas = fechas[::3]
+    evaluaciones_batch = []
+    contador = 0
 
-    for periodo in periodos:
-        dias_periodo = (periodo.fecha_fin - periodo.fecha_inicio).days + 1
-        fechas = [periodo.fecha_inicio + timedelta(days=i) for i in range(dias_periodo)]
+    for insc in inscripciones:
+        curso_id = insc.curso_id
+        estudiante_id = insc.estudiante_id
 
-        for insc in inscripciones:
-            curso_id = insc.curso_id
-            estudiante_id = insc.estudiante_id
+        materias_ids = [
+            cm.materia_id for cm in cursomaterias if cm.curso_id == curso_id
+        ]
 
-            # Buscar materias del curso
-            materias_ids = [
-                cm.materia_id for cm in cursomaterias if cm.curso_id == curso_id
-            ]
+        for materia_id in materias_ids:
+            estudiante = db.query(Estudiante).get(estudiante_id)
+            print(
+                f"🔷 {estudiante.nombre} {estudiante.apellido} - Materia {materia_id}"
+            )
 
-            for materia_id in materias_ids:
-                for f in fechas:
-                    # Asistencia (cada día)
-                    asistencia_valor = random.choice([100, 50, 0])
-                    db.add(
+            for f in fechas:
+                evaluaciones_batch.extend(
+                    [
                         Evaluacion(
                             fecha=f,
                             descripcion="Asistencia",
-                            valor=asistencia_valor,
+                            valor=random.choice([100, 50, 0]),
                             estudiante_id=estudiante_id,
                             materia_id=materia_id,
                             tipo_evaluacion_id=tipo_dict["asistencia"],
                             periodo_id=periodo.id,
-                        )
-                    )
-
-                    # Participación (cada día)
-                    participacion_valor = random.uniform(0, 100)
-                    db.add(
+                        ),
                         Evaluacion(
                             fecha=f,
                             descripcion="Participación en clase",
-                            valor=round(participacion_valor, 2),
+                            valor=round(random.uniform(0, 100), 2),
                             estudiante_id=estudiante_id,
                             materia_id=materia_id,
                             tipo_evaluacion_id=tipo_dict["participaciones"],
-                            periodo_id=periodo.id,  
-                        )
-                    )
-
-                    # Tarea (cada día)
-                    tarea_valor = random.uniform(50, 100)
-                    db.add(
+                            periodo_id=periodo.id,
+                        ),
                         Evaluacion(
                             fecha=f,
                             descripcion="Tarea del día",
-                            valor=round(tarea_valor, 2),
+                            valor=round(random.uniform(50, 100), 2),
                             estudiante_id=estudiante_id,
                             materia_id=materia_id,
                             tipo_evaluacion_id=tipo_dict["tareas"],
                             periodo_id=periodo.id,
+                        ),
+                    ]
+                )
+
+                if (f - periodo.fecha_inicio).days % 2 == 0:
+                    evaluaciones_batch.append(
+                        Evaluacion(
+                            fecha=f,
+                            descripcion="Práctica",
+                            valor=round(random.uniform(0, 100), 2),
+                            estudiante_id=estudiante_id,
+                            materia_id=materia_id,
+                            tipo_evaluacion_id=tipo_dict["prácticas"],
+                            periodo_id=periodo.id,
                         )
                     )
 
-                    # Práctica (cada 2 días)
-                    if (f - periodo.fecha_inicio).days % 2 == 0:
-                        practica_valor = random.uniform(0, 100)
-                        db.add(
-                            Evaluacion(
-                                fecha=f,
-                                descripcion="Práctica",
-                                valor=round(practica_valor, 2),
-                                estudiante_id=estudiante_id,
-                                materia_id=materia_id,
-                                tipo_evaluacion_id=tipo_dict["prácticas"],
-                                periodo_id=periodo.id,
-                            )
-                        )
-
-                    # Exposición (cada semana)
-                    if f.weekday() == 0:
-                        expos_valor = random.uniform(60, 100)
-                        db.add(
+                if f.weekday() == 0:
+                    evaluaciones_batch.extend(
+                        [
                             Evaluacion(
                                 fecha=f,
                                 descripcion="Exposición",
-                                valor=round(expos_valor, 2),
+                                valor=round(random.uniform(60, 100), 2),
                                 estudiante_id=estudiante_id,
                                 materia_id=materia_id,
                                 tipo_evaluacion_id=tipo_dict["exposiciones"],
                                 periodo_id=periodo.id,
-                            )
-                        )
-
-                        ensayo_valor = random.uniform(20, 100)
-                        db.add(
+                            ),
                             Evaluacion(
                                 fecha=f,
                                 descripcion="Ensayo",
-                                valor=round(ensayo_valor, 2),
+                                valor=round(random.uniform(20, 100), 2),
                                 estudiante_id=estudiante_id,
                                 materia_id=materia_id,
                                 tipo_evaluacion_id=tipo_dict["ensayos"],
                                 periodo_id=periodo.id,
-                            )
-                        )
-
-                        cuestionario_valor = random.uniform(0, 100)
-                        db.add(
+                            ),
                             Evaluacion(
                                 fecha=f,
                                 descripcion="Cuestionario",
-                                valor=round(cuestionario_valor, 2),
+                                valor=round(random.uniform(0, 100), 2),
                                 estudiante_id=estudiante_id,
                                 materia_id=materia_id,
                                 tipo_evaluacion_id=tipo_dict["cuestionarios"],
                                 periodo_id=periodo.id,
-                            )
-                        )
-
-                        grupal_valor = random.uniform(60, 100)
-                        db.add(
+                            ),
                             Evaluacion(
                                 fecha=f,
                                 descripcion="Trabajo grupal",
-                                valor=round(grupal_valor, 2),
+                                valor=round(random.uniform(60, 100), 2),
                                 estudiante_id=estudiante_id,
                                 materia_id=materia_id,
                                 tipo_evaluacion_id=tipo_dict["trabajo grupal"],
                                 periodo_id=periodo.id,
-                            )
-                        )
+                            ),
+                        ]
+                    )
 
-                    # Examen (2 veces al mes)
-                    if f.day in [15, 30] or (f.day == 28 and f.month == 2):
-                        examen_valor = random.uniform(0, 100)
-                        db.add(
-                            Evaluacion(
-                                fecha=f,
-                                descripcion="Examen parcial",
-                                valor=round(examen_valor, 2),
-                                estudiante_id=estudiante_id,
-                                materia_id=materia_id,
-                                tipo_evaluacion_id=tipo_dict["exámenes"],
-                                periodo_id=periodo.id,
-                            )
+                if f.day in [15, 30] or (f.day == 28 and f.month == 2):
+                    evaluaciones_batch.append(
+                        Evaluacion(
+                            fecha=f,
+                            descripcion="Examen parcial",
+                            valor=round(random.uniform(0, 100), 2),
+                            estudiante_id=estudiante_id,
+                            materia_id=materia_id,
+                            tipo_evaluacion_id=tipo_dict["exámenes"],
+                            periodo_id=periodo.id,
                         )
+                    )
 
-                    # Proyecto final (últimos 5 días del periodo)
-                    if (periodo.fecha_fin - f).days < 5:
-                        proyecto_valor = random.uniform(60, 100)
-                        db.add(
-                            Evaluacion(
-                                fecha=f,
-                                descripcion="Proyecto final",
-                                valor=round(proyecto_valor, 2),
-                                estudiante_id=estudiante_id,
-                                materia_id=materia_id,
-                                tipo_evaluacion_id=tipo_dict["proyecto final"],
-                                periodo_id=periodo.id,
-                            )
+                if (periodo.fecha_fin - f).days < 5:
+                    evaluaciones_batch.append(
+                        Evaluacion(
+                            fecha=f,
+                            descripcion="Proyecto final",
+                            valor=round(random.uniform(60, 100), 2),
+                            estudiante_id=estudiante_id,
+                            materia_id=materia_id,
+                            tipo_evaluacion_id=tipo_dict["proyecto final"],
+                            periodo_id=periodo.id,
                         )
+                    )
 
-    db.commit()
+                contador += 1
+                if contador % 500 == 0:
+                    db.add_all(evaluaciones_batch)
+                    db.commit()
+                    print(f"💾 Guardadas {contador} evaluaciones...")
+                    evaluaciones_batch.clear()
+
+    if evaluaciones_batch:
+        db.add_all(evaluaciones_batch)
+        db.commit()
+        print(f"✅ Guardadas las últimas {len(evaluaciones_batch)} evaluaciones.")
+
+    print(f"🎉 Evaluaciones completadas para el periodo: {periodo.nombre}")

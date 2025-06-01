@@ -1010,3 +1010,34 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
         "promedio_general": promedio_general,
         "resumen": resumen,
     }
+
+
+@router.get("/por-docente/{docente_id}", response_model=list[EvaluacionOut])
+def evaluaciones_por_docente(
+    docente_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    from app.models import DocenteMateria
+
+    # Obtener las materias que enseña el docente
+    materias_asignadas = (
+        db.query(DocenteMateria.materia_id)
+        .filter(DocenteMateria.docente_id == docente_id)
+        .all()
+    )
+
+    materia_ids = [m.materia_id for m in materias_asignadas]
+
+    if not materia_ids:
+        raise HTTPException(status_code=404, detail="El docente no tiene materias asignadas")
+
+    # Buscar evaluaciones de esas materias
+    evaluaciones = (
+        db.query(Evaluacion)
+        .filter(Evaluacion.materia_id.in_(materia_ids))
+        .order_by(Evaluacion.fecha.desc())
+        .all()
+    )
+
+    return evaluaciones
