@@ -1,8 +1,8 @@
 """Primera migracion
 
-Revision ID: 9fc9f8ce97af
+Revision ID: 0c9e1534dce8
 Revises: 
-Create Date: 2025-05-19 21:58:42.280459
+Create Date: 2025-06-01 19:34:22.374672
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '9fc9f8ce97af'
+revision: str = '0c9e1534dce8'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -83,6 +83,15 @@ def upgrade() -> None:
     sa.UniqueConstraint('nombre')
     )
     op.create_index(op.f('ix_materias_id'), 'materias', ['id'], unique=False)
+    op.create_table('tipoevaluaciones',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('nombre', sa.String(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('nombre')
+    )
+    op.create_index(op.f('ix_tipoevaluaciones_id'), 'tipoevaluaciones', ['id'], unique=False)
     op.create_table('curso_materia',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('curso_id', sa.Integer(), nullable=False),
@@ -120,18 +129,90 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_inscripciones_id'), 'inscripciones', ['id'], unique=False)
+    op.create_table('periodos',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('nombre', sa.String(), nullable=False),
+    sa.Column('fecha_inicio', sa.Date(), nullable=False),
+    sa.Column('fecha_fin', sa.Date(), nullable=False),
+    sa.Column('gestion_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['gestion_id'], ['gestiones.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('nombre')
+    )
+    op.create_index(op.f('ix_periodos_id'), 'periodos', ['id'], unique=False)
+    op.create_table('peso_tipo_evaluacion',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('porcentaje', sa.Float(), nullable=False),
+    sa.Column('docente_id', sa.Integer(), nullable=False),
+    sa.Column('materia_id', sa.Integer(), nullable=False),
+    sa.Column('gestion_id', sa.Integer(), nullable=False),
+    sa.Column('tipo_evaluacion_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['docente_id'], ['docentes.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['gestion_id'], ['gestiones.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['materia_id'], ['materias.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['tipo_evaluacion_id'], ['tipoevaluaciones.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_peso_tipo_evaluacion_id'), 'peso_tipo_evaluacion', ['id'], unique=False)
+    op.create_table('evaluaciones',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('fecha', sa.Date(), nullable=False),
+    sa.Column('descripcion', sa.String(), nullable=False),
+    sa.Column('valor', sa.Float(), nullable=False),
+    sa.Column('estudiante_id', sa.Integer(), nullable=False),
+    sa.Column('materia_id', sa.Integer(), nullable=False),
+    sa.Column('tipo_evaluacion_id', sa.Integer(), nullable=False),
+    sa.Column('periodo_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['estudiante_id'], ['estudiantes.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['materia_id'], ['materias.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['periodo_id'], ['periodos.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['tipo_evaluacion_id'], ['tipoevaluaciones.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_evaluaciones_id'), 'evaluaciones', ['id'], unique=False)
+    op.create_table('rendimiento_final',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('nota_final', sa.Float(), nullable=False),
+    sa.Column('fecha_calculo', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('estudiante_id', sa.Integer(), nullable=False),
+    sa.Column('materia_id', sa.Integer(), nullable=False),
+    sa.Column('periodo_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['estudiante_id'], ['estudiantes.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['materia_id'], ['materias.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['periodo_id'], ['periodos.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_rendimiento_final_id'), 'rendimiento_final', ['id'], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_rendimiento_final_id'), table_name='rendimiento_final')
+    op.drop_table('rendimiento_final')
+    op.drop_index(op.f('ix_evaluaciones_id'), table_name='evaluaciones')
+    op.drop_table('evaluaciones')
+    op.drop_index(op.f('ix_peso_tipo_evaluacion_id'), table_name='peso_tipo_evaluacion')
+    op.drop_table('peso_tipo_evaluacion')
+    op.drop_index(op.f('ix_periodos_id'), table_name='periodos')
+    op.drop_table('periodos')
     op.drop_index(op.f('ix_inscripciones_id'), table_name='inscripciones')
     op.drop_table('inscripciones')
     op.drop_index(op.f('ix_docente_materia_id'), table_name='docente_materia')
     op.drop_table('docente_materia')
     op.drop_index(op.f('ix_curso_materia_id'), table_name='curso_materia')
     op.drop_table('curso_materia')
+    op.drop_index(op.f('ix_tipoevaluaciones_id'), table_name='tipoevaluaciones')
+    op.drop_table('tipoevaluaciones')
     op.drop_index(op.f('ix_materias_id'), table_name='materias')
     op.drop_table('materias')
     op.drop_index(op.f('ix_gestiones_id'), table_name='gestiones')

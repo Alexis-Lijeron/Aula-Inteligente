@@ -317,9 +317,7 @@ def calcular_todos_los_rendimientos_periodos(
         for materia_id in materia_ids:
             # Obtener docente asignado a esa materia
             docente_materia = (
-                db.query(DocenteMateria)
-                .filter_by(materia_id=materia_id)
-                .first()
+                db.query(DocenteMateria).filter_by(materia_id=materia_id).first()
             )
 
             if not docente_materia:
@@ -361,7 +359,9 @@ def calcular_todos_los_rendimientos_periodos(
                     )
 
                     if evaluaciones:
-                        promedio = sum(e.valor for e in evaluaciones) / len(evaluaciones)
+                        promedio = sum(e.valor for e in evaluaciones) / len(
+                            evaluaciones
+                        )
                         aporte = (promedio * peso.porcentaje) / 100
                         nota_final += aporte
                         detalle.append(
@@ -413,7 +413,10 @@ def calcular_todos_los_rendimientos_periodos(
 
     return resultados
 
-@router.get("/estudiante/{estudiante_id}/gestion/{gestion_id}", response_model=list[dict])
+
+@router.get(
+    "/estudiante/{estudiante_id}/gestion/{gestion_id}", response_model=list[dict]
+)
 def listar_rendimientos_por_gestion(
     estudiante_id: int,
     gestion_id: int,
@@ -445,13 +448,163 @@ def listar_rendimientos_por_gestion(
     for r in rendimientos:
         materia = db.query(Materia).filter_by(id=r.materia_id).first()
 
-        resultados.append({
-            "materia_id": r.materia_id,
-            "materia_nombre": materia.nombre if materia else "Desconocida",
-            "periodo_id": r.periodo_id,
-            "periodo_nombre": periodo_dict.get(r.periodo_id, "Desconocido"),
-            "nota_final": r.nota_final,
-            "fecha_calculo": r.fecha_calculo,
-        })
+        resultados.append(
+            {
+                "materia_id": r.materia_id,
+                "materia_nombre": materia.nombre if materia else "Desconocida",
+                "periodo_id": r.periodo_id,
+                "periodo_nombre": periodo_dict.get(r.periodo_id, "Desconocido"),
+                "nota_final": r.nota_final,
+                "fecha_calculo": r.fecha_calculo,
+            }
+        )
+
+    return resultados
+
+
+@router.get("/curso/{curso_id}/gestion/{gestion_id}", response_model=list[dict])
+def rendimiento_final_curso_por_gestion(
+    curso_id: int,
+    gestion_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    from app.models import (
+        Inscripcion,
+        CursoMateria,
+        DocenteMateria,
+        Evaluacion,
+        TipoEvaluacion,
+        PesoTipoEvaluacion,
+        RendimientoFinal,
+        Periodo,
+        Estudiante,
+        Materia,
+    )
+
+    periodos = db.query(Periodo).filter_by(gestion_id=gestion_id).all()
+    if not periodos:
+        raise HTTPException(status_code=404, detail="No hay periodos en esta gestión")
+
+    periodo_ids = [p.id for p in periodos]
+    periodo_dict = {p.id: p.nombre for p in periodos}
+
+    estudiantes = (
+        db.query(Estudiante)
+        .join(Inscripcion)
+        .filter(Inscripcion.curso_id == curso_id, Inscripcion.gestion_id == gestion_id)
+        .all()
+    )
+
+    if not estudiantes:
+        raise HTTPException(
+            status_code=404, detail="No hay estudiantes inscritos en este curso"
+        )
+
+    curso_materias = db.query(CursoMateria).filter_by(curso_id=curso_id).all()
+    materia_ids = [cm.materia_id for cm in curso_materias]
+    materias_dict = {
+        m.id: m.nombre
+        for m in db.query(Materia).filter(Materia.id.in_(materia_ids)).all()
+    }
+
+    tipos = db.query(TipoEvaluacion).all()
+    resultados = []
+
+    for estudiante in estudiantes:
+        for materia_id in materia_ids:
+            docente_materia = (
+                db.query(DocenteMateria).filter_by(materia_id=materia_id).first()
+            )
+            if not docente_materia:
+                continue
+            docente_id = docente_materia.docente_id
+
+            for periodo_id in periodo_ids:
+                nota_final = 0.0
+                total_peso = 0
+                detalle = []
+
+                for tipo in tipos:
+                    peso = (
+                        db.query(PesoTipoEvaluacion)
+                        .filter_by(
+                            docente_id=docente_id,
+                            materia_id=materia_id,
+                            gestion_id=gestion_id,
+                            tipo_evaluacion_id=tipo.id,
+                        )
+                        .first()
+                    )
+                    if not peso:
+                        continue
+
+                    evaluaciones = (
+                        db.query(Evaluacion)
+                        .filter_by(
+                            estudiante_id=estudiante.id,
+                            materia_id=materia_id,
+                            periodo_id=periodo_id,
+                            tipo_evaluacion_id=tipo.id,
+                        )
+                        .all()
+                    )
+                    if evaluaciones:
+                        promedio = sum(e.valor for e in evaluaciones) / len(
+                            evaluaciones
+                        )
+                        aporte = (promedio * peso.porcentaje) / 100
+                        nota_final += aporte
+                        total_peso += peso.porcentaje
+                        detalle.append(
+                            {
+                                "tipo_evaluacion_id": tipo.id,
+                                "promedio": round(promedio, 2),
+                                "peso": peso.porcentaje,
+                                "aporte": round(aporte, 2),
+                            }
+                        )
+
+                nota_final = round(nota_final, 2)
+
+                # ✅ Guardar o actualizar en la tabla rendimiento_final
+                existente = (
+                    db.query(RendimientoFinal)
+                    .filter_by(
+                        estudiante_id=estudiante.id,
+                        materia_id=materia_id,
+                        periodo_id=periodo_id,
+                    )
+                    .first()
+                )
+
+                if existente:
+                    existente.nota_final = nota_final
+                    existente.fecha_calculo = func.now()
+                    db.commit()
+                    db.refresh(existente)
+                else:
+                    nuevo = RendimientoFinal(
+                        estudiante_id=estudiante.id,
+                        materia_id=materia_id,
+                        periodo_id=periodo_id,
+                        nota_final=nota_final,
+                    )
+                    db.add(nuevo)
+                    db.commit()
+                    db.refresh(nuevo)
+
+                resultados.append(
+                    {
+                        "estudiante_id": estudiante.id,
+                        "estudiante_nombre": f"{estudiante.nombre} {estudiante.apellido}",
+                        "materia_id": materia_id,
+                        "materia_nombre": materias_dict.get(materia_id, "Desconocida"),
+                        "periodo_id": periodo_id,
+                        "periodo_nombre": periodo_dict.get(periodo_id, "Desconocido"),
+                        "nota_final": nota_final,
+                        "detalle": detalle,
+                    }
+                )
 
     return resultados

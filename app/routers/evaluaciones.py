@@ -753,7 +753,8 @@ def registrar_evaluaciones_masiva(
         "gestion_id": gestion_id,
         "tipo_evaluacion": tipo_nombre,
     }
-    
+
+
 @router.get("/resumen/por-estudiante-periodo", response_model=dict)
 def resumen_evaluaciones_por_estudiante_y_periodo(
     estudiante_id: int,
@@ -814,7 +815,8 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
         "periodo_id": periodo_id,
         "resumen": resumen,
     }
-    
+
+
 @router.get("/resumen/por-estudiante-periodo-total", response_model=dict)
 def resumen_evaluaciones_por_estudiante_y_periodo(
     estudiante_id: int,
@@ -854,12 +856,16 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
             continue
 
         # ✅ Corregido: usamos tipo_evaluacion_id
-        peso = db.query(PesoTipoEvaluacion).filter(
-            PesoTipoEvaluacion.docente_id == docente_id,
-            PesoTipoEvaluacion.materia_id == materia_id,
-            PesoTipoEvaluacion.gestion_id == gestion_id,
-            PesoTipoEvaluacion.tipo_evaluacion_id == tipo.id
-        ).first()
+        peso = (
+            db.query(PesoTipoEvaluacion)
+            .filter(
+                PesoTipoEvaluacion.docente_id == docente_id,
+                PesoTipoEvaluacion.materia_id == materia_id,
+                PesoTipoEvaluacion.gestion_id == gestion_id,
+                PesoTipoEvaluacion.tipo_evaluacion_id == tipo.id,
+            )
+            .first()
+        )
 
         if not peso:
             continue  # si no hay peso definido, lo omitimos
@@ -885,7 +891,7 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
                 "porcentaje": porcentaje,
                 "total": len(evaluaciones),
                 "detalle": detalle,
-                "puntos": puntos_tipo
+                "puntos": puntos_tipo,
             }
         else:
             promedio = round(sum(e.valor for e in evaluaciones) / len(evaluaciones), 2)
@@ -899,10 +905,12 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
                 "promedio": promedio,
                 "total": len(evaluaciones),
                 "detalle": detalle,
-                "puntos": puntos_tipo
+                "puntos": puntos_tipo,
             }
 
-    promedio_general = round((total_ponderado / total_puntos) * 100, 2) if total_puntos > 0 else 0.0
+    promedio_general = (
+        round((total_ponderado / total_puntos) * 100, 2) if total_puntos > 0 else 0.0
+    )
 
     return {
         "periodo_id": periodo_id,
@@ -910,6 +918,7 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
         "promedio_general": promedio_general,
         "resumen": resumen,
     }
+
 
 @router.get("/resumen/por-estudiante-periodo-definitivo", response_model=dict)
 def resumen_evaluaciones_por_estudiante_y_periodo(
@@ -930,7 +939,9 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
     # Obtener el docente asignado a la materia
     docente_materia = db.query(DocenteMateria).filter_by(materia_id=materia_id).first()
     if not docente_materia:
-        raise HTTPException(status_code=404, detail="No se encontró docente asignado a esta materia.")
+        raise HTTPException(
+            status_code=404, detail="No se encontró docente asignado a esta materia."
+        )
     docente_id = docente_materia.docente_id
 
     tipos = db.query(TipoEvaluacion).order_by(TipoEvaluacion.id).all()
@@ -954,12 +965,16 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
             continue
 
         # Obtener el porcentaje definido por el docente
-        peso = db.query(PesoTipoEvaluacion).filter(
-            PesoTipoEvaluacion.docente_id == docente_id,
-            PesoTipoEvaluacion.materia_id == materia_id,
-            PesoTipoEvaluacion.gestion_id == gestion_id,
-            PesoTipoEvaluacion.tipo_evaluacion_id == tipo.id
-        ).first()
+        peso = (
+            db.query(PesoTipoEvaluacion)
+            .filter(
+                PesoTipoEvaluacion.docente_id == docente_id,
+                PesoTipoEvaluacion.materia_id == materia_id,
+                PesoTipoEvaluacion.gestion_id == gestion_id,
+                PesoTipoEvaluacion.tipo_evaluacion_id == tipo.id,
+            )
+            .first()
+        )
 
         if not peso:
             continue
@@ -985,7 +1000,7 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
                 "porcentaje": porcentaje,
                 "total": len(evaluaciones),
                 "detalle": detalle,
-                "puntos": puntos_tipo
+                "puntos": puntos_tipo,
             }
         else:
             promedio = round(sum(e.valor for e in evaluaciones) / len(evaluaciones), 2)
@@ -999,10 +1014,12 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
                 "promedio": promedio,
                 "total": len(evaluaciones),
                 "detalle": detalle,
-                "puntos": puntos_tipo
+                "puntos": puntos_tipo,
             }
 
-    promedio_general = round((total_ponderado / total_puntos) * 100, 2) if total_puntos > 0 else 0.0
+    promedio_general = (
+        round((total_ponderado / total_puntos) * 100, 2) if total_puntos > 0 else 0.0
+    )
 
     return {
         "periodo_id": periodo_id,
@@ -1030,7 +1047,9 @@ def evaluaciones_por_docente(
     materia_ids = [m.materia_id for m in materias_asignadas]
 
     if not materia_ids:
-        raise HTTPException(status_code=404, detail="El docente no tiene materias asignadas")
+        raise HTTPException(
+            status_code=404, detail="El docente no tiene materias asignadas"
+        )
 
     # Buscar evaluaciones de esas materias
     evaluaciones = (
@@ -1041,3 +1060,165 @@ def evaluaciones_por_docente(
     )
 
     return evaluaciones
+
+
+@router.get("/resumen/por-estudiante-docente-auto", response_model=dict)
+def resumen_por_estudiante_docente_auto(
+    estudiante_id: int,
+    docente_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    from app.models import (
+        Periodo,
+        Inscripcion,
+        DocenteMateria,
+        PesoTipoEvaluacion,
+        TipoEvaluacion,
+        Curso,
+        Materia,
+    )
+
+    # Paso 1: determinar periodo activo por fecha actual
+    fecha_actual = date.today()
+    periodo = (
+        db.query(Periodo)
+        .filter(Periodo.fecha_inicio <= fecha_actual, Periodo.fecha_fin >= fecha_actual)
+        .first()
+    )
+    if not periodo:
+        raise HTTPException(status_code=404, detail="No se encontró un periodo activo")
+    periodo_id = periodo.id
+    gestion_id = periodo.gestion_id
+
+    # Paso 2: obtener curso del estudiante en esta gestión
+    inscripcion = (
+        db.query(Inscripcion)
+        .filter_by(estudiante_id=estudiante_id, gestion_id=gestion_id)
+        .first()
+    )
+    if not inscripcion:
+        raise HTTPException(
+            status_code=404, detail="El estudiante no está inscrito en esta gestión"
+        )
+    curso_id = inscripcion.curso_id
+
+    # Paso 3: obtener materia asignada al docente
+    materia_docente = db.query(DocenteMateria).filter_by(docente_id=docente_id).first()
+    if not materia_docente:
+        raise HTTPException(
+            status_code=404, detail="El docente no tiene materias asignadas"
+        )
+    materia_id = materia_docente.materia_id
+
+    # Paso 4: verificar si hay evaluaciones del estudiante en esa materia y periodo
+    evaluaciones_existentes = (
+        db.query(Evaluacion)
+        .filter_by(
+            estudiante_id=estudiante_id, periodo_id=periodo_id, materia_id=materia_id
+        )
+        .first()
+    )
+    if not evaluaciones_existentes:
+        raise HTTPException(
+            status_code=404,
+            detail="No se encontraron evaluaciones del estudiante para esa materia y periodo",
+        )
+
+    # Paso 5: construir el resumen ponderado
+    tipos = db.query(TipoEvaluacion).order_by(TipoEvaluacion.id).all()
+    resumen = {}
+    total_ponderado = 0
+    total_puntos = 0
+
+    for tipo in tipos:
+        evaluaciones = (
+            db.query(Evaluacion)
+            .filter_by(
+                estudiante_id=estudiante_id,
+                materia_id=materia_id,
+                periodo_id=periodo_id,
+                tipo_evaluacion_id=tipo.id,
+            )
+            .all()
+        )
+        if not evaluaciones:
+            continue
+
+        peso = (
+            db.query(PesoTipoEvaluacion)
+            .filter_by(
+                docente_id=docente_id,
+                materia_id=materia_id,
+                gestion_id=gestion_id,
+                tipo_evaluacion_id=tipo.id,
+            )
+            .first()
+        )
+
+        if not peso:
+            continue
+
+        puntos_tipo = peso.porcentaje
+        key = str(tipo.id)
+        detalle = [
+            {
+                "fecha": e.fecha.isoformat(),
+                "descripcion": e.descripcion,
+                "valor": e.valor,
+            }
+            for e in evaluaciones
+        ]
+
+        if tipo.nombre.lower() == "asistencia":
+            presentes = sum(1 for e in evaluaciones if e.valor >= 1)
+            porcentaje = round((presentes / len(evaluaciones)) * 100, 2)
+            resumen[key] = {
+                "id": tipo.id,
+                "nombre": tipo.nombre,
+                "porcentaje": porcentaje,
+                "total": len(evaluaciones),
+                "detalle": detalle,
+                "puntos": puntos_tipo,
+            }
+        else:
+            promedio = round(sum(e.valor for e in evaluaciones) / len(evaluaciones), 2)
+            ponderado = promedio * (puntos_tipo / 100)
+            total_ponderado += ponderado
+            total_puntos += puntos_tipo
+
+            resumen[key] = {
+                "id": tipo.id,
+                "nombre": tipo.nombre,
+                "promedio": promedio,
+                "total": len(evaluaciones),
+                "detalle": detalle,
+                "puntos": puntos_tipo,
+            }
+
+    promedio_general = (
+        round((total_ponderado / total_puntos) * 100, 2) if total_puntos > 0 else 0.0
+    )
+
+    # También retornamos los nombres si se desea mostrar en frontend
+    curso = db.query(Curso).filter_by(id=curso_id).first()
+    materia = db.query(Materia).filter_by(id=materia_id).first()
+
+    return {
+        "fecha_actual": fecha_actual.isoformat(),
+        "periodo_id": periodo_id,
+        "gestion_id": gestion_id,
+        "curso": {
+            "id": curso_id,
+            "nombre": curso.nombre,
+            "nivel": curso.nivel,
+            "paralelo": curso.paralelo,
+            "turno": curso.turno,
+        },
+        "materia": {
+            "id": materia_id,
+            "nombre": materia.nombre,
+        },
+        "promedio_general": promedio_general,
+        "resumen": resumen,
+    }

@@ -16,6 +16,8 @@ from app.routers import (
     peso_tipo_evaluacion,
     rendimiento_final,
     resumen,
+    prediccion_rendimiento,
+    ml_prediccion,
 )
 
 app = FastAPI(
@@ -48,3 +50,5 @@ app.include_router(tipo_evaluacion.router)
 app.include_router(peso_tipo_evaluacion.router)
 app.include_router(rendimiento_final.router)
 app.include_router(resumen.router)
+app.include_router(prediccion_rendimiento.router)
+app.include_router(ml_prediccion.router)

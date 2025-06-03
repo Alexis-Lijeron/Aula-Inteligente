@@ -32,10 +32,12 @@ from app.models import (
     evaluacion,
     tipo_evaluacion,
     peso_tipo_evaluacion,
-    rendimiento_final
+    rendimiento_final,
+    prediccion_rendimiento,
 )  # importa todos tus modelos
 
 target_metadata = Base.metadata
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
