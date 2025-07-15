@@ -34,6 +34,8 @@ from app.models import (
     peso_tipo_evaluacion,
     rendimiento_final,
     prediccion_rendimiento,
+    padre,
+    padre_estudiante,
 )  # importa todos tus modelos
 
 target_metadata = Base.metadata
@@ -83,7 +85,9 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
 
         with context.begin_transaction():
             context.run_migrations()

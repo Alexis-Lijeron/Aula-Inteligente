@@ -1,8 +1,8 @@
 """Primera migracion
 
-Revision ID: 0c9e1534dce8
+Revision ID: 1db13882d216
 Revises: 
-Create Date: 2025-06-01 19:34:22.374672
+Create Date: 2025-07-14 19:34:21.061256
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '0c9e1534dce8'
-down_revision: Union[str, None] = None
+revision: str = '1db13882d216'
+down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -58,9 +58,12 @@ def upgrade() -> None:
     sa.Column('nombre_tutor', sa.String(), nullable=True),
     sa.Column('telefono_tutor', sa.String(), nullable=True),
     sa.Column('direccion_casa', sa.String(), nullable=True),
+    sa.Column('correo', sa.String(), nullable=True),
+    sa.Column('contrasena', sa.String(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('correo')
     )
     op.create_index(op.f('ix_estudiantes_id'), 'estudiantes', ['id'], unique=False)
     op.create_table('gestiones',
@@ -83,6 +86,20 @@ def upgrade() -> None:
     sa.UniqueConstraint('nombre')
     )
     op.create_index(op.f('ix_materias_id'), 'materias', ['id'], unique=False)
+    op.create_table('padres',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('nombre', sa.String(), nullable=False),
+    sa.Column('apellido', sa.String(), nullable=False),
+    sa.Column('telefono', sa.String(), nullable=False),
+    sa.Column('correo', sa.String(), nullable=False),
+    sa.Column('genero', sa.String(), nullable=False),
+    sa.Column('contrasena', sa.String(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('correo')
+    )
+    op.create_index(op.f('ix_padres_id'), 'padres', ['id'], unique=False)
     op.create_table('tipoevaluaciones',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('nombre', sa.String(), nullable=False),
@@ -129,6 +146,17 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_inscripciones_id'), 'inscripciones', ['id'], unique=False)
+    op.create_table('padre_estudiante',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('padre_id', sa.Integer(), nullable=False),
+    sa.Column('estudiante_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['estudiante_id'], ['estudiantes.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['padre_id'], ['padres.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_padre_estudiante_id'), 'padre_estudiante', ['id'], unique=False)
     op.create_table('periodos',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('nombre', sa.String(), nullable=False),
@@ -176,6 +204,25 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_evaluaciones_id'), 'evaluaciones', ['id'], unique=False)
+    op.create_table('prediccion_rendimiento',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('promedio_notas', sa.Float(), nullable=False),
+    sa.Column('porcentaje_asistencia', sa.Float(), nullable=False),
+    sa.Column('promedio_participacion', sa.Float(), nullable=False),
+    sa.Column('resultado_numerico', sa.Float(), nullable=False),
+    sa.Column('clasificacion', sa.String(), nullable=False),
+    sa.Column('fecha_generada', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('estudiante_id', sa.Integer(), nullable=False),
+    sa.Column('materia_id', sa.Integer(), nullable=False),
+    sa.Column('periodo_id', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['estudiante_id'], ['estudiantes.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['materia_id'], ['materias.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['periodo_id'], ['periodos.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_prediccion_rendimiento_id'), 'prediccion_rendimiento', ['id'], unique=False)
     op.create_table('rendimiento_final',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('nota_final', sa.Float(), nullable=False),
@@ -199,12 +246,16 @@ def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index(op.f('ix_rendimiento_final_id'), table_name='rendimiento_final')
     op.drop_table('rendimiento_final')
+    op.drop_index(op.f('ix_prediccion_rendimiento_id'), table_name='prediccion_rendimiento')
+    op.drop_table('prediccion_rendimiento')
     op.drop_index(op.f('ix_evaluaciones_id'), table_name='evaluaciones')
     op.drop_table('evaluaciones')
     op.drop_index(op.f('ix_peso_tipo_evaluacion_id'), table_name='peso_tipo_evaluacion')
     op.drop_table('peso_tipo_evaluacion')
     op.drop_index(op.f('ix_periodos_id'), table_name='periodos')
     op.drop_table('periodos')
+    op.drop_index(op.f('ix_padre_estudiante_id'), table_name='padre_estudiante')
+    op.drop_table('padre_estudiante')
     op.drop_index(op.f('ix_inscripciones_id'), table_name='inscripciones')
     op.drop_table('inscripciones')
     op.drop_index(op.f('ix_docente_materia_id'), table_name='docente_materia')
@@ -213,6 +264,8 @@ def downgrade() -> None:
     op.drop_table('curso_materia')
     op.drop_index(op.f('ix_tipoevaluaciones_id'), table_name='tipoevaluaciones')
     op.drop_table('tipoevaluaciones')
+    op.drop_index(op.f('ix_padres_id'), table_name='padres')
+    op.drop_table('padres')
     op.drop_index(op.f('ix_materias_id'), table_name='materias')
     op.drop_table('materias')
     op.drop_index(op.f('ix_gestiones_id'), table_name='gestiones')

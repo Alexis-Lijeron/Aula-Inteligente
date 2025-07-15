@@ -1,7 +1,7 @@
-from passlib.context import CryptContext  # type: ignore
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
+from passlib.hash import bcrypt
 
 def hash_contrasena(contrasena: str) -> str:
-    return pwd_context.hash(contrasena)
+    return bcrypt.hash(contrasena)
+
+def verificar_contrasena(contrasena_plana: str, contrasena_hash: str) -> bool:
+    return bcrypt.verify(contrasena_plana, contrasena_hash)

@@ -14,5 +14,13 @@ class Estudiante(Base):
     nombre_tutor = Column(String, nullable=True)
     telefono_tutor = Column(String, nullable=True)
     direccion_casa = Column(String, nullable=True)
+    # 🆕 NUEVOS: Campos para login unificado
+    correo = Column(String, unique=True, nullable=True)  # Opcional para estudiantes
+    contrasena = Column(String, nullable=True)  # Opcional para estudiantes
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # 🆕 Relación para acceder a padres
+    @property
+    def padres(self):
+        return [rel.padre for rel in self.padres_relacion]
