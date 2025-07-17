@@ -201,3 +201,97 @@ def obtener_estudiante(
     if not estudiante:
         raise HTTPException(status_code=404, detail="Estudiante no encontrado")
     return estudiante
+
+
+@router.get("/mi-curso-actual", response_model=dict)
+def obtener_mi_curso_actual(
+    payload: dict = Depends(usuario_autenticado), db: Session = Depends(get_db)
+):
+    """🏫 Obtener mi curso actual (versión simplificada)"""
+    correo = payload.get("sub")
+    estudiante = crud.obtener_por_correo(db, correo)
+
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    from app.crud import estudiante_info_academica as info_crud
+
+    curso = info_crud.obtener_curso_estudiante(db, estudiante.id)
+
+    if not curso:
+        return {
+            "success": False,
+            "mensaje": "No tienes curso asignado en la gestión actual",
+        }
+
+    return {"success": True, "curso": curso, "mensaje": "Curso obtenido exitosamente"}
+
+
+@router.get("/mis-materias-docentes", response_model=dict)
+def obtener_mis_materias_con_docentes(
+    payload: dict = Depends(usuario_autenticado), db: Session = Depends(get_db)
+):
+    """📚 Obtener mis materias con sus docentes (versión simplificada)"""
+    correo = payload.get("sub")
+    estudiante = crud.obtener_por_correo(db, correo)
+
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    from app.crud import estudiante_info_academica as info_crud
+
+    materias = info_crud.obtener_materias_estudiante(db, estudiante.id)
+
+    return {
+        "success": True,
+        "materias": materias,
+        "total": len(materias),
+        "mensaje": f"Se encontraron {len(materias)} materias",
+    }
+
+
+@router.get("/dashboard-academico", response_model=dict)
+def obtener_dashboard_academico(
+    payload: dict = Depends(usuario_autenticado), db: Session = Depends(get_db)
+):
+    """📊 Dashboard académico completo del estudiante"""
+    correo = payload.get("sub")
+    estudiante = crud.obtener_por_correo(db, correo)
+
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    from app.crud import estudiante_info_academica as info_crud
+
+    # Obtener toda la información
+    info_completa = info_crud.obtener_info_academica_estudiante(db, estudiante.id)
+
+    if "error" in info_completa:
+        return {"success": False, "mensaje": info_completa["error"]}
+
+    # Estadísticas adicionales
+    materias = info_completa["materias"]
+    docentes_unicos = set()
+    materias_con_docente = 0
+
+    for materia in materias:
+        if materia["docente"]:
+            materias_con_docente += 1
+            docentes_unicos.add(materia["docente"]["id"])
+
+    dashboard = {
+        "success": True,
+        "estudiante": info_completa["estudiante"],
+        "curso": info_completa["curso"],
+        "gestion": info_completa["gestion"],
+        "estadisticas": {
+            "total_materias": len(materias),
+            "materias_con_docente": materias_con_docente,
+            "materias_sin_docente": len(materias) - materias_con_docente,
+            "total_docentes": len(docentes_unicos),
+        },
+        "materias": materias,
+        "mensaje": "Dashboard académico obtenido exitosamente",
+    }
+
+    return dashboard

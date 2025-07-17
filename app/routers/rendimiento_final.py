@@ -6,7 +6,7 @@ from app.models.evaluacion import Evaluacion
 from app.models.peso_tipo_evaluacion import PesoTipoEvaluacion
 from app.models.tipo_evaluacion import TipoEvaluacion
 from app.schemas.rendimiento_final import *
-from app.auth.roles import docente_o_admin_required
+from app.auth.roles import docente_o_admin_required, usuario_autenticado
 from app.crud import rendimiento_final as crud
 
 router = APIRouter(prefix="/rendimientos", tags=["Rendimiento Final"])
@@ -273,7 +273,7 @@ def calcular_todos_los_rendimientos_periodos(
     estudiante_id: int,
     gestion_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     from app.models import (
         Inscripcion,
@@ -421,7 +421,7 @@ def listar_rendimientos_por_gestion(
     estudiante_id: int,
     gestion_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     from app.models import Periodo, RendimientoFinal, Materia
 

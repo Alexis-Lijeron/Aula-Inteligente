@@ -20,6 +20,7 @@ from app.routers import (
     ml_prediccion,
     padres,
     auth,
+    estudiante_info_academica,
 )
 
 app = FastAPI(
@@ -56,3 +57,4 @@ app.include_router(prediccion_rendimiento.router)
 app.include_router(ml_prediccion.router)
 app.include_router(padres.router)
 app.include_router(auth.router)
+app.include_router(estudiante_info_academica.router)
