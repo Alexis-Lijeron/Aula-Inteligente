@@ -1,5 +1,6 @@
 from sqlalchemy import Column, DateTime, Integer, String, Boolean, func
 from app.database import Base
+from sqlalchemy.orm import relationship
 
 
 class Docente(Base):
@@ -15,3 +16,5 @@ class Docente(Base):
     is_doc = Column(Boolean, default=True)  # True = docente, False = admin
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    sesiones_asistencia = relationship("SesionAsistencia", back_populates="docente")

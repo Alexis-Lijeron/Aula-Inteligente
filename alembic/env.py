@@ -36,6 +36,7 @@ from app.models import (
     prediccion_rendimiento,
     padre,
     padre_estudiante,
+    sesion_asistencia,
 )  # importa todos tus modelos
 
 target_metadata = Base.metadata
