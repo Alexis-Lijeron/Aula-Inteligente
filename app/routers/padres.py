@@ -11,6 +11,12 @@ from app.crud import padre as crud
 from app.crud import sesion_asistencia as asistencia_crud
 from app.auth.roles import admin_required, usuario_autenticado, propietario_o_admin
 from typing import List, Optional
+from app.schemas.estudiante_info_academica import (
+    MateriaConDocente,
+    CursoBasico,
+    DocenteConMaterias,
+    InfoAcademicaCompleta,
+)
 
 router = APIRouter(prefix="/padres", tags=["👨‍👩‍👧‍👦 Padres"])
 
@@ -24,6 +30,97 @@ def get_db():
 
 
 # ========== RUTAS ESPECÍFICAS (DEBEN IR PRIMERO) ==========
+
+# ========== ENDPOINT PARA VER INFORMACIÓN ACADÉMICA DE TODOS LOS HIJOS ==========
+
+
+@router.get("/info-academica-todos-hijos", response_model=dict)
+def obtener_info_academica_todos_hijos(
+    gestion_id: Optional[int] = Query(None, description="ID de la gestión (opcional)"),
+    payload: dict = Depends(usuario_autenticado),
+    db: Session = Depends(get_db),
+):
+    """📋 Ver información académica de todos mis hijos (curso, materias, docentes)"""
+    # Verificar que el usuario es padre
+    if payload.get("user_type") != "padre":
+        raise HTTPException(status_code=403, detail="Solo padres pueden acceder")
+
+    padre_id = payload.get("user_id")
+
+    # Obtener todos los hijos del padre
+    hijos = crud.obtener_hijos_del_padre(db, padre_id)
+
+    if not hijos:
+        return {"success": False, "mensaje": "No tienes hijos registrados", "data": []}
+
+    # Obtener información académica para cada hijo
+    info_hijos = []
+
+    for hijo in hijos:
+        # Obtener información académica del hijo
+        from app.crud import estudiante_info_academica as info_crud
+
+        info_academica = info_crud.obtener_info_academica_estudiante(
+            db, hijo.id, gestion_id
+        )
+
+        # Si hay error, incluirlo en el resultado
+        if "error" in info_academica:
+            info_hijos.append(
+                {
+                    "estudiante": {
+                        "id": hijo.id,
+                        "nombre": hijo.nombre,
+                        "apellido": hijo.apellido,
+                        "codigo": f"EST{hijo.id:03d}",
+                    },
+                    "info_academica": None,
+                    "error": info_academica["error"],
+                    "estadisticas": {
+                        "total_materias": 0,
+                        "materias_con_docente": 0,
+                        "materias_sin_docente": 0,
+                        "total_docentes_unicos": 0,
+                    },
+                }
+            )
+            continue
+
+        # Calcular estadísticas
+        materias = info_academica.get("materias", [])
+        materias_con_docente = sum(1 for m in materias if m.get("docente") is not None)
+        materias_sin_docente = len(materias) - materias_con_docente
+
+        # Contar docentes únicos
+        docentes_unicos = set()
+        for materia in materias:
+            if materia.get("docente"):
+                docentes_unicos.add(materia["docente"]["id"])
+
+        info_hijos.append(
+            {
+                "estudiante": {
+                    "id": hijo.id,
+                    "nombre": hijo.nombre,
+                    "apellido": hijo.apellido,
+                    "codigo": f"EST{hijo.id:03d}",
+                },
+                "info_academica": info_academica,
+                "estadisticas": {
+                    "total_materias": len(materias),
+                    "materias_con_docente": materias_con_docente,
+                    "materias_sin_docente": materias_sin_docente,
+                    "total_docentes_unicos": len(docentes_unicos),
+                },
+            }
+        )
+
+    return {
+        "success": True,
+        "data": info_hijos,
+        "total_hijos": len(hijos),
+        "mensaje": f"Información académica obtenida para {len(hijos)} hijo(s)",
+    }
 
 
 @router.get("/", response_model=List[PadreOut])
@@ -452,3 +549,320 @@ def obtener_padre(
     if not padre:
         raise HTTPException(status_code=404, detail="Padre no encontrado")
     return padre
+
+
+@router.get("/hijo/{estudiante_id}/materias", response_model=dict)
+def obtener_materias_de_hijo(
+    estudiante_id: int,
+    gestion_id: Optional[int] = Query(None, description="ID de la gestión (opcional)"),
+    payload: dict = Depends(usuario_autenticado),
+    db: Session = Depends(get_db),
+):
+    """📚 Ver las materias de mi hijo con sus docentes"""
+    # Verificar que el usuario es padre
+    if payload.get("user_type") != "padre":
+        raise HTTPException(status_code=403, detail="Solo padres pueden acceder")
+
+    padre_id = payload.get("user_id")
+
+    # Verificar que es padre del estudiante
+    if not crud.es_padre_del_estudiante(db, padre_id, estudiante_id):
+        raise HTTPException(
+            status_code=403, detail="No autorizado para ver este estudiante"
+        )
+
+    # Obtener información del estudiante
+    from app.crud import estudiante as estudiante_crud
+
+    estudiante = estudiante_crud.obtener_estudiante(db, estudiante_id)
+
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    # Obtener materias del estudiante
+    from app.crud import estudiante_info_academica as info_crud
+
+    materias = info_crud.obtener_materias_estudiante(db, estudiante_id, gestion_id)
+
+    if not materias:
+        return {
+            "success": False,
+            "estudiante": {
+                "id": estudiante.id,
+                "nombre": estudiante.nombre,
+                "apellido": estudiante.apellido,
+                "codigo": f"EST{estudiante.id:03d}",
+            },
+            "materias": [],
+            "total": 0,
+            "mensaje": "El estudiante no tiene materias asignadas en esta gestión",
+        }
+
+    return {
+        "success": True,
+        "estudiante": {
+            "id": estudiante.id,
+            "nombre": estudiante.nombre,
+            "apellido": estudiante.apellido,
+            "codigo": f"EST{estudiante.id:03d}",
+        },
+        "materias": materias,
+        "total": len(materias),
+        "mensaje": f"Se encontraron {len(materias)} materia(s) para el estudiante",
+    }
+
+
+@router.get("/hijo/{estudiante_id}/curso", response_model=dict)
+def obtener_curso_de_hijo(
+    estudiante_id: int,
+    gestion_id: Optional[int] = Query(None, description="ID de la gestión (opcional)"),
+    payload: dict = Depends(usuario_autenticado),
+    db: Session = Depends(get_db),
+):
+    """🏫 Ver el curso actual de mi hijo"""
+    # Verificar que el usuario es padre
+    if payload.get("user_type") != "padre":
+        raise HTTPException(status_code=403, detail="Solo padres pueden acceder")
+
+    padre_id = payload.get("user_id")
+
+    # Verificar que es padre del estudiante
+    if not crud.es_padre_del_estudiante(db, padre_id, estudiante_id):
+        raise HTTPException(
+            status_code=403, detail="No autorizado para ver este estudiante"
+        )
+
+    # Obtener información del estudiante
+    from app.crud import estudiante as estudiante_crud
+
+    estudiante = estudiante_crud.obtener_estudiante(db, estudiante_id)
+
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    # Obtener curso del estudiante
+    from app.crud import estudiante_info_academica as info_crud
+
+    curso = info_crud.obtener_curso_estudiante(db, estudiante_id, gestion_id)
+
+    if not curso:
+        return {
+            "success": False,
+            "estudiante": {
+                "id": estudiante.id,
+                "nombre": estudiante.nombre,
+                "apellido": estudiante.apellido,
+                "codigo": f"EST{estudiante.id:03d}",
+            },
+            "curso": None,
+            "mensaje": "El estudiante no tiene curso asignado en esta gestión",
+        }
+
+    return {
+        "success": True,
+        "estudiante": {
+            "id": estudiante.id,
+            "nombre": estudiante.nombre,
+            "apellido": estudiante.apellido,
+            "codigo": f"EST{estudiante.id:03d}",
+        },
+        "curso": curso,
+        "mensaje": "Curso obtenido exitosamente",
+    }
+
+
+@router.get("/hijo/{estudiante_id}/docentes", response_model=dict)
+def obtener_docentes_de_hijo(
+    estudiante_id: int,
+    gestion_id: Optional[int] = Query(None, description="ID de la gestión (opcional)"),
+    payload: dict = Depends(usuario_autenticado),
+    db: Session = Depends(get_db),
+):
+    """👨‍🏫 Ver todos los docentes que enseñan a mi hijo"""
+    # Verificar que el usuario es padre
+    if payload.get("user_type") != "padre":
+        raise HTTPException(status_code=403, detail="Solo padres pueden acceder")
+
+    padre_id = payload.get("user_id")
+
+    # Verificar que es padre del estudiante
+    if not crud.es_padre_del_estudiante(db, padre_id, estudiante_id):
+        raise HTTPException(
+            status_code=403, detail="No autorizado para ver este estudiante"
+        )
+
+    # Obtener información del estudiante
+    from app.crud import estudiante as estudiante_crud
+
+    estudiante = estudiante_crud.obtener_estudiante(db, estudiante_id)
+
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    # Obtener docentes del estudiante
+    from app.crud import estudiante_info_academica as info_crud
+
+    docentes = info_crud.obtener_docentes_estudiante(db, estudiante_id, gestion_id)
+
+    if not docentes:
+        return {
+            "success": False,
+            "estudiante": {
+                "id": estudiante.id,
+                "nombre": estudiante.nombre,
+                "apellido": estudiante.apellido,
+                "codigo": f"EST{estudiante.id:03d}",
+            },
+            "docentes": [],
+            "total": 0,
+            "mensaje": "El estudiante no tiene docentes asignados en esta gestión",
+        }
+
+    return {
+        "success": True,
+        "estudiante": {
+            "id": estudiante.id,
+            "nombre": estudiante.nombre,
+            "apellido": estudiante.apellido,
+            "codigo": f"EST{estudiante.id:03d}",
+        },
+        "docentes": docentes,
+        "total": len(docentes),
+        "mensaje": f"Se encontraron {len(docentes)} docente(s) para el estudiante",
+    }
+
+
+@router.get("/hijo/{estudiante_id}/info-academica-completa", response_model=dict)
+def obtener_info_academica_completa_hijo(
+    estudiante_id: int,
+    gestion_id: Optional[int] = Query(None, description="ID de la gestión (opcional)"),
+    payload: dict = Depends(usuario_autenticado),
+    db: Session = Depends(get_db),
+):
+    """📋 Ver toda la información académica completa de mi hijo"""
+    # Verificar que el usuario es padre
+    if payload.get("user_type") != "padre":
+        raise HTTPException(status_code=403, detail="Solo padres pueden acceder")
+
+    padre_id = payload.get("user_id")
+
+    # Verificar que es padre del estudiante
+    if not crud.es_padre_del_estudiante(db, padre_id, estudiante_id):
+        raise HTTPException(
+            status_code=403, detail="No autorizado para ver este estudiante"
+        )
+
+    # Obtener información académica completa
+    from app.crud import estudiante_info_academica as info_crud
+
+    info_academica = info_crud.obtener_info_academica_estudiante(
+        db, estudiante_id, gestion_id
+    )
+
+    # Verificar si hay error en la respuesta
+    if "error" in info_academica:
+        return {"success": False, "mensaje": info_academica["error"]}
+
+    # Calcular estadísticas adicionales
+    materias = info_academica.get("materias", [])
+    materias_con_docente = sum(1 for m in materias if m.get("docente") is not None)
+    materias_sin_docente = len(materias) - materias_con_docente
+
+    # Contar docentes únicos
+    docentes_unicos = set()
+    for materia in materias:
+        if materia.get("docente"):
+            docentes_unicos.add(materia["docente"]["id"])
+
+    return {
+        "success": True,
+        "info_academica": info_academica,
+        "estadisticas": {
+            "total_materias": len(materias),
+            "materias_con_docente": materias_con_docente,
+            "materias_sin_docente": materias_sin_docente,
+            "total_docentes_unicos": len(docentes_unicos),
+        },
+        "mensaje": f"Información académica completa obtenida para la gestión {info_academica.get('gestion', {}).get('anio', 'N/A')}",
+    }
+
+
+@router.get("/hijo/{estudiante_id}/materia/{materia_id}/docente", response_model=dict)
+def obtener_docente_de_materia_hijo(
+    estudiante_id: int,
+    materia_id: int,
+    gestion_id: Optional[int] = Query(None, description="ID de la gestión (opcional)"),
+    payload: dict = Depends(usuario_autenticado),
+    db: Session = Depends(get_db),
+):
+    """👨‍🏫 Ver el docente de una materia específica de mi hijo"""
+    # Verificar que el usuario es padre
+    if payload.get("user_type") != "padre":
+        raise HTTPException(status_code=403, detail="Solo padres pueden acceder")
+
+    padre_id = payload.get("user_id")
+
+    # Verificar que es padre del estudiante
+    if not crud.es_padre_del_estudiante(db, padre_id, estudiante_id):
+        raise HTTPException(
+            status_code=403, detail="No autorizado para ver este estudiante"
+        )
+
+    # Obtener información del estudiante
+    from app.crud import estudiante as estudiante_crud
+
+    estudiante = estudiante_crud.obtener_estudiante(db, estudiante_id)
+
+    if not estudiante:
+        raise HTTPException(status_code=404, detail="Estudiante no encontrado")
+
+    # Obtener materias del estudiante
+    from app.crud import estudiante_info_academica as info_crud
+
+    materias = info_crud.obtener_materias_estudiante(db, estudiante_id, gestion_id)
+
+    # Buscar la materia específica
+    materia_encontrada = None
+    for materia in materias:
+        if materia["materia"]["id"] == materia_id:
+            materia_encontrada = materia
+            break
+
+    if not materia_encontrada:
+        return {
+            "success": False,
+            "estudiante": {
+                "id": estudiante.id,
+                "nombre": estudiante.nombre,
+                "apellido": estudiante.apellido,
+                "codigo": f"EST{estudiante.id:03d}",
+            },
+            "mensaje": "El estudiante no está inscrito en esta materia o la materia no existe",
+        }
+
+    if not materia_encontrada["docente"]:
+        return {
+            "success": False,
+            "estudiante": {
+                "id": estudiante.id,
+                "nombre": estudiante.nombre,
+                "apellido": estudiante.apellido,
+                "codigo": f"EST{estudiante.id:03d}",
+            },
+            "materia": materia_encontrada["materia"],
+            "docente": None,
+            "mensaje": "Esta materia no tiene docente asignado",
+        }
+
+    return {
+        "success": True,
+        "estudiante": {
+            "id": estudiante.id,
+            "nombre": estudiante.nombre,
+            "apellido": estudiante.apellido,
+            "codigo": f"EST{estudiante.id:03d}",
+        },
+        "materia": materia_encontrada["materia"],
+        "docente": materia_encontrada["docente"],
+        "mensaje": "Docente encontrado exitosamente",
+    }
