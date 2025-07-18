@@ -1081,7 +1081,7 @@ def generar_prediccion_y_guardar(
     estudiante_id: int = Body(...),
     materia_id: int = Body(...),
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     try:
         # Obtener el último periodo activo
@@ -1148,7 +1148,7 @@ def generar_predicciones_por_gestion(
     materia_id: int = Body(...),
     gestion_id: int = Body(...),
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     """
     Genera y guarda predicciones de un estudiante para todos los periodos de una gestión
@@ -1307,8 +1307,9 @@ def obtener_predicciones_estudiante_gestion(
         raise HTTPException(status_code=500, detail="Error obteniendo predicciones")
 
 
-
-@router.get("/estudiante/{estudiante_id}/gestion/{gestion_id}", response_model=list[dict])
+@router.get(
+    "/estudiante/{estudiante_id}/gestion/{gestion_id}", response_model=list[dict]
+)
 def obtener_predicciones_estudiante_gestion(
     estudiante_id: int,
     gestion_id: int,
@@ -1361,23 +1362,117 @@ def obtener_predicciones_estudiante_gestion(
             )
 
             for pred in predicciones:
-                periodo = (
-                    db.query(Periodo)
-                    .filter_by(id=pred.periodo_id)
-                    .first()
+                periodo = db.query(Periodo).filter_by(id=pred.periodo_id).first()
+
+                resultados.append(
+                    {
+                        "materia_id": materia.id,
+                        "materia_nombre": materia.nombre,
+                        "periodo_id": periodo.id,
+                        "periodo_nombre": periodo.nombre,
+                        "promedio_notas": pred.promedio_notas,
+                        "porcentaje_asistencia": pred.porcentaje_asistencia,
+                        "promedio_participacion": pred.promedio_participacion,
+                        "resultado_numerico": pred.resultado_numerico,
+                        "clasificacion": pred.clasificacion,
+                        "fecha_generada": pred.fecha_generada,
+                    }
                 )
 
-                resultados.append({
-                    "materia_id": materia.id,
-                    "materia_nombre": materia.nombre,
-                    "periodo_id": periodo.id,
-                    "periodo_nombre": periodo.nombre,
-                    "promedio_notas": pred.promedio_notas,
-                    "porcentaje_asistencia": pred.porcentaje_asistencia,
-                    "promedio_participacion": pred.promedio_participacion,
-                    "resultado_numerico": pred.resultado_numerico,
-                    "clasificacion": pred.clasificacion,
-                    "fecha_generada": pred.fecha_generada,
-                })
-
     return resultados
+
+
+@router.get("/predicciones-completas")
+def obtener_o_generar_predicciones_completas(
+    estudiante_id: int = Query(...),
+    materia_id: int = Query(...),
+    gestion_id: int = Query(...),
+    db: Session = Depends(get_db),
+    payload: dict = Depends(usuario_autenticado),
+):
+    """
+    Retorna predicciones completas para una materia en una gestión.
+    Si no existen, las genera automáticamente.
+    """
+    try:
+        # Obtener todos los periodos de la gestión
+        periodos = (
+            db.query(Periodo)
+            .filter(Periodo.gestion_id == gestion_id)
+            .order_by(Periodo.fecha_inicio)
+            .all()
+        )
+
+        if not periodos:
+            raise HTTPException(
+                status_code=404, detail="No hay periodos en esta gestión"
+            )
+
+        periodo_ids = [p.id for p in periodos]
+
+        # Verificar si ya existen predicciones guardadas
+        predicciones = (
+            db.query(PrediccionRendimiento)
+            .filter(
+                PrediccionRendimiento.estudiante_id == estudiante_id,
+                PrediccionRendimiento.materia_id == materia_id,
+                PrediccionRendimiento.periodo_id.in_(periodo_ids),
+            )
+            .all()
+        )
+
+        service = get_prediction_service()
+
+        # Si no hay ninguna, las generamos
+        if not predicciones:
+            for periodo in periodos:
+                try:
+                    service.predecir_estudiante_por_bd(
+                        db, estudiante_id, materia_id, periodo.id
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Error generando predicción para periodo {periodo.id}: {str(e)}"
+                    )
+
+            # Buscar nuevamente
+            predicciones = (
+                db.query(PrediccionRendimiento)
+                .filter(
+                    PrediccionRendimiento.estudiante_id == estudiante_id,
+                    PrediccionRendimiento.materia_id == materia_id,
+                    PrediccionRendimiento.periodo_id.in_(periodo_ids),
+                )
+                .all()
+            )
+
+        if not predicciones:
+            raise HTTPException(
+                status_code=500, detail="No se pudieron generar las predicciones"
+            )
+
+        resultado = [
+            {
+                "id": p.id,
+                "estudiante_id": p.estudiante_id,
+                "materia_id": p.materia_id,
+                "periodo_id": p.periodo_id,
+                "promedio_notas": p.promedio_notas,
+                "porcentaje_asistencia": p.porcentaje_asistencia,
+                "promedio_participacion": p.promedio_participacion,
+                "resultado_numerico": p.resultado_numerico,
+                "clasificacion": p.clasificacion,
+                "fecha_generada": p.fecha_generada.isoformat(),
+            }
+            for p in predicciones
+        ]
+
+        return {
+            "success": True,
+            "mensaje": f"Se encontraron {len(resultado)} predicciones",
+            "data": resultado,
+        }
+
+    except Exception as e:
+        logger.error(f"Error en predicciones-completas: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al procesar la solicitud")
