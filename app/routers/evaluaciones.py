@@ -1,5 +1,5 @@
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models.estudiante import Estudiante
@@ -10,6 +10,12 @@ from app.schemas.evaluacion import EvaluacionCreate, EvaluacionUpdate, Evaluacio
 from app.crud import evaluacion as crud
 from app.auth.roles import docente_o_admin_required, usuario_autenticado
 from app.models.tipo_evaluacion import TipoEvaluacion
+
+# 🆕 NUEVO: Imports para el sistema de notificaciones
+from app.services.notification_service import NotificationService
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/evaluaciones", tags=["Evaluaciones"])
 
@@ -22,13 +28,41 @@ def get_db():
         db.close()
 
 
+# 🆕 NUEVA: Función helper para manejar notificaciones automáticas
+def _verificar_y_notificar_calificacion_baja(db: Session, evaluacion: Evaluacion):
+    """Helper para verificar y enviar notificaciones de calificaciones bajas"""
+    if evaluacion and evaluacion.valor < 50:
+        try:
+            notificaciones = (
+                NotificationService.verificar_y_notificar_calificacion_baja(
+                    db, evaluacion.id
+                )
+            )
+            if notificaciones:
+                logger.info(
+                    f"Enviadas {len(notificaciones)} notificaciones para evaluación {evaluacion.id} (valor: {evaluacion.valor})"
+                )
+            return len(notificaciones)
+        except Exception as e:
+            logger.error(
+                f"Error enviando notificaciones para evaluación {evaluacion.id}: {e}"
+            )
+            return 0
+    return 0
+
+
 @router.post("/", response_model=EvaluacionOut)
 def crear(
     datos: EvaluacionCreate,
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.get("/", response_model=list[EvaluacionOut])
@@ -60,6 +94,10 @@ def actualizar(
     e = crud.actualizar_evaluacion(db, evaluacion_id, datos)
     if not e:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+
+    # 🆕 NUEVO: Verificar y notificar si la actualización resultó en calificación baja
+    _verificar_y_notificar_calificacion_baja(db, e)
+
     return e
 
 
@@ -95,7 +133,12 @@ def registrar_examen(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Exámenes")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/tarea", response_model=EvaluacionOut)
@@ -105,7 +148,12 @@ def registrar_tarea(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Tareas")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/exposicion", response_model=EvaluacionOut)
@@ -115,7 +163,12 @@ def registrar_exposicion(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Exposiciones")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/participacion", response_model=EvaluacionOut)
@@ -125,7 +178,12 @@ def registrar_participacion(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Participaciones")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/asistencia", response_model=EvaluacionOut)
@@ -135,7 +193,12 @@ def registrar_asistencia(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Asistencia")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/practica", response_model=EvaluacionOut)
@@ -145,7 +208,12 @@ def registrar_practica(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Prácticas")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/proyecto", response_model=EvaluacionOut)
@@ -155,7 +223,12 @@ def registrar_proyecto_final(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Proyecto final")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/grupal", response_model=EvaluacionOut)
@@ -165,7 +238,12 @@ def registrar_trabajo_grupal(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Trabajo grupal")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/ensayo", response_model=EvaluacionOut)
@@ -175,7 +253,12 @@ def registrar_ensayo(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Ensayos")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 @router.post("/registrar/cuestionario", response_model=EvaluacionOut)
@@ -185,7 +268,12 @@ def registrar_cuestionario(
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Cuestionarios")
-    return crud.crear_evaluacion(db, datos)
+    evaluacion = crud.crear_evaluacion(db, datos)
+
+    # 🆕 NUEVO: Verificar y notificar si es calificación baja
+    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+
+    return evaluacion
 
 
 # ------------------- FILTROS POR ESTUDIANTE Y PERIODO -------------------
@@ -408,7 +496,6 @@ def ver_evaluaciones_por_tipo(
 
 
 # ------------------- RESUMEN DE EVALUACIONES -------------------
-from datetime import date
 
 
 @router.get("/resumen/por-estudiante", response_model=dict)
@@ -514,6 +601,8 @@ def registrar_asistencia_masiva(
 ):
     periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
     registros = []
+    notificaciones_enviadas = 0  # 🆕 NUEVO: Contador de notificaciones
+
     for est in estudiantes:
         est_id = est["id"]
         estado = est["estado"].lower()
@@ -549,10 +638,36 @@ def registrar_asistencia_masiva(
         registros.append(est_id)
 
     db.commit()
+
+    # 🆕 NUEVO: Verificar notificaciones para asistencias con valor < 50
+    for est in estudiantes:
+        est_id = est["id"]
+        estado = est["estado"].lower()
+        valor, _ = estado_valores[estado]
+
+        if valor < 50:  # Falta o tarde
+            evaluacion_creada = (
+                db.query(Evaluacion)
+                .filter_by(
+                    estudiante_id=est_id,
+                    materia_id=materia_id,
+                    periodo_id=periodo_id,
+                    fecha=fecha,
+                    tipo_evaluacion_id=5,
+                    valor=valor,
+                )
+                .first()
+            )
+
+            if evaluacion_creada:
+                count = _verificar_y_notificar_calificacion_baja(db, evaluacion_creada)
+                notificaciones_enviadas += count
+
     return {
         "mensaje": f"Asistencia registrada para estudiantes: {registros}",
         "periodo_id": periodo_id,
         "gestion_id": gestion_id,
+        "notificaciones_enviadas": notificaciones_enviadas,  # 🆕 NUEVO
     }
 
 
@@ -568,6 +683,8 @@ def registrar_participacion_masiva(
 ):
     periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
     registros = []
+    notificaciones_enviadas = 0  # 🆕 NUEVO: Contador de notificaciones
+
     for est in estudiantes:
         est_id = est["id"]
         valor = est["valor"]
@@ -592,10 +709,35 @@ def registrar_participacion_masiva(
         registros.append(est_id)
 
     db.commit()
+
+    # 🆕 NUEVO: Verificar notificaciones para participaciones bajas
+    for est in estudiantes:
+        est_id = est["id"]
+        valor = est["valor"]
+
+        if valor < 50:
+            evaluacion_creada = (
+                db.query(Evaluacion)
+                .filter_by(
+                    estudiante_id=est_id,
+                    materia_id=materia_id,
+                    periodo_id=periodo_id,
+                    fecha=fecha,
+                    tipo_evaluacion_id=4,
+                    valor=valor,
+                )
+                .first()
+            )
+
+            if evaluacion_creada:
+                count = _verificar_y_notificar_calificacion_baja(db, evaluacion_creada)
+                notificaciones_enviadas += count
+
     return {
         "mensaje": f"Participaciones registradas para estudiantes: {registros}",
         "periodo_id": periodo_id,
         "gestion_id": gestion_id,
+        "notificaciones_enviadas": notificaciones_enviadas,  # 🆕 NUEVO
     }
 
 
@@ -710,7 +852,6 @@ def registrar_evaluaciones_masiva(
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
-
     # Obtener periodo y gestión
     periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
 
@@ -721,6 +862,7 @@ def registrar_evaluaciones_masiva(
 
     tipo_nombre = tipo.nombre
     registros = []
+    notificaciones_enviadas = 0  # 🆕 NUEVO: Contador de notificaciones
 
     for est in estudiantes:
         est_id = est["id"]
@@ -747,12 +889,123 @@ def registrar_evaluaciones_masiva(
         registros.append(est_id)
 
     db.commit()
+
+    # 🆕 NUEVO: Verificar y notificar calificaciones bajas
+    for est in estudiantes:
+        est_id = est["id"]
+        valor = est["valor"]
+
+        if valor < 50:
+            # Buscar la evaluación recién creada
+            evaluacion_creada = (
+                db.query(Evaluacion)
+                .filter(
+                    Evaluacion.estudiante_id == est_id,
+                    Evaluacion.materia_id == materia_id,
+                    Evaluacion.tipo_evaluacion_id == tipo_evaluacion_id,
+                    Evaluacion.fecha == fecha,
+                    Evaluacion.valor == valor,
+                )
+                .order_by(Evaluacion.id.desc())
+                .first()
+            )
+
+            if evaluacion_creada:
+                count = _verificar_y_notificar_calificacion_baja(db, evaluacion_creada)
+                notificaciones_enviadas += count
+
     return {
         "mensaje": f"Evaluaciones '{tipo_nombre}' registradas para estudiantes: {registros}",
         "periodo_id": periodo_id,
         "gestion_id": gestion_id,
         "tipo_evaluacion": tipo_nombre,
+        "notificaciones_enviadas": notificaciones_enviadas,  # 🆕 NUEVO
     }
+
+
+# 🆕 NUEVO: Endpoint para verificar notificaciones manualmente
+@router.post("/verificar-notificaciones/{evaluacion_id}")
+def verificar_notificaciones_evaluacion(
+    evaluacion_id: int,
+    umbral: float = Query(
+        50.0, ge=0, le=100, description="Umbral mínimo para notificar"
+    ),
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    """🔔 Verificar manualmente si una evaluación necesita notificaciones"""
+    try:
+        notificaciones = NotificationService.verificar_y_notificar_calificacion_baja(
+            db, evaluacion_id, umbral
+        )
+
+        return {
+            "success": True,
+            "mensaje": f"{len(notificaciones)} notificaciones enviadas",
+            "notificaciones_ids": notificaciones,
+            "umbral_usado": umbral,
+            "evaluacion_id": evaluacion_id,
+        }
+
+    except Exception as e:
+        logger.error(
+            f"Error verificando notificaciones para evaluación {evaluacion_id}: {e}"
+        )
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+# 🆕 NUEVO: Endpoint para reenviar notificaciones de evaluaciones existentes
+@router.post("/reenviar-notificaciones-bajas")
+def reenviar_notificaciones_calificaciones_bajas(
+    materia_id: int = Query(..., description="ID de la materia"),
+    periodo_id: int = Query(..., description="ID del periodo"),
+    umbral: float = Query(
+        50.0, ge=0, le=100, description="Umbral para calificaciones bajas"
+    ),
+    db: Session = Depends(get_db),
+    payload: dict = Depends(docente_o_admin_required),
+):
+    """🔄 Reenviar notificaciones para todas las calificaciones bajas existentes"""
+    try:
+        # Buscar todas las evaluaciones con valor menor al umbral
+        evaluaciones_bajas = (
+            db.query(Evaluacion)
+            .filter(
+                Evaluacion.materia_id == materia_id,
+                Evaluacion.periodo_id == periodo_id,
+                Evaluacion.valor < umbral,
+            )
+            .all()
+        )
+
+        total_notificaciones = 0
+        evaluaciones_procesadas = 0
+
+        for evaluacion in evaluaciones_bajas:
+            try:
+                notificaciones = (
+                    NotificationService.verificar_y_notificar_calificacion_baja(
+                        db, evaluacion.id, umbral
+                    )
+                )
+                total_notificaciones += len(notificaciones)
+                evaluaciones_procesadas += 1
+            except Exception as e:
+                logger.error(f"Error procesando evaluación {evaluacion.id}: {e}")
+                continue
+
+        return {
+            "success": True,
+            "mensaje": f"Proceso completado: {total_notificaciones} notificaciones enviadas",
+            "evaluaciones_procesadas": evaluaciones_procesadas,
+            "total_evaluaciones_bajas": len(evaluaciones_bajas),
+            "notificaciones_enviadas": total_notificaciones,
+            "umbral_usado": umbral,
+        }
+
+    except Exception as e:
+        logger.error(f"Error en reenviar_notificaciones_calificaciones_bajas: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
 @router.get("/resumen/por-estudiante-periodo", response_model=dict)

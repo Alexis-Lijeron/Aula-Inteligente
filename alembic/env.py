@@ -37,6 +37,7 @@ from app.models import (
     padre,
     padre_estudiante,
     sesion_asistencia,
+    notificacion,
 )  # importa todos tus modelos
 
 target_metadata = Base.metadata

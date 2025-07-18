@@ -217,7 +217,7 @@ def listar(
 def obtener_estudiante(
     estudiante_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(propietario_o_admin),
+    payload: dict = Depends(usuario_autenticado),
 ):
     """👤 Obtener datos de un estudiante"""
     # Verificar permisos: debe ser el mismo estudiante, padre del estudiante, o admin

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel, validator
 from app.database import SessionLocal
-from app.auth.roles import docente_o_admin_required
+from app.auth.roles import docente_o_admin_required, usuario_autenticado
 import logging
 
 from app.models.curso_materia import CursoMateria
@@ -1313,7 +1313,7 @@ def obtener_predicciones_estudiante_gestion(
     estudiante_id: int,
     gestion_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     # Verificar que el estudiante existe
     estudiante = db.query(Estudiante).filter_by(id=estudiante_id).first()

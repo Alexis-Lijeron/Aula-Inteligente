@@ -1,5 +1,6 @@
 from sqlalchemy import Column, DateTime, Integer, String, Date, func
 from app.database import Base
+from sqlalchemy.orm import relationship
 
 
 class Estudiante(Base):
@@ -24,3 +25,5 @@ class Estudiante(Base):
     @property
     def padres(self):
         return [rel.padre for rel in self.padres_relacion]
+
+    notificaciones_generadas = relationship("Notificacion", back_populates="estudiante")

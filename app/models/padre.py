@@ -20,3 +20,5 @@ class Padre(Base):
     @property
     def hijos(self):
         return [rel.estudiante for rel in self.hijos_relacion]
+
+    notificaciones_recibidas = relationship("Notificacion", back_populates="padre")
