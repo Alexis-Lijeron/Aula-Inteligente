@@ -8,7 +8,7 @@ from app.models.inscripcion import Inscripcion
 from app.models.periodo import Periodo
 from app.schemas.evaluacion import EvaluacionCreate, EvaluacionUpdate, EvaluacionOut
 from app.crud import evaluacion as crud
-from app.auth.roles import docente_o_admin_required
+from app.auth.roles import docente_o_admin_required, usuario_autenticado
 from app.models.tipo_evaluacion import TipoEvaluacion
 
 router = APIRouter(prefix="/evaluaciones", tags=["Evaluaciones"])
@@ -416,7 +416,7 @@ def resumen_evaluaciones_auto_periodo(
     estudiante_id: int,
     materia_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     fecha_actual = date.today()
     periodo_id, _ = obtener_periodo_y_gestion_por_fecha(db, fecha_actual)
@@ -824,7 +824,7 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
     periodo_id: int,
     docente_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     from app.models import Periodo, PesoTipoEvaluacion
 
@@ -926,7 +926,7 @@ def resumen_evaluaciones_por_estudiante_y_periodo(
     materia_id: int,
     periodo_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     from app.models import Periodo, PesoTipoEvaluacion, DocenteMateria
 
@@ -1067,7 +1067,7 @@ def resumen_por_estudiante_docente_auto(
     estudiante_id: int,
     docente_id: int,
     db: Session = Depends(get_db),
-    payload: dict = Depends(docente_o_admin_required),
+    payload: dict = Depends(usuario_autenticado),
 ):
     from app.models import (
         Periodo,

@@ -1,6 +1,3 @@
-# app/routers/padres.py
-# REORGANIZAR EN ESTE ORDEN ESPECÍFICO:
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
