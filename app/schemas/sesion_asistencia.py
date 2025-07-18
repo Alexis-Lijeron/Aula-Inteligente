@@ -31,7 +31,7 @@ class SesionAsistenciaBase(BaseModel):
     descripcion: Optional[str] = None
     curso_id: int
     materia_id: int
-    periodo_id: int
+    periodo_id: Optional[int] = None
     duracion_minutos: int = Field(default=60, ge=10, le=20)  # Entre 10 min y 20 min
     radio_permitido_metros: int = Field(default=100, ge=10, le=100)  # Entre 10m y 100m
     permite_asistencia_tardia: bool = True
@@ -52,12 +52,30 @@ class SesionAsistenciaCreate(SesionAsistenciaBase):
     latitud_docente: float = Field(..., ge=-90, le=90)
     longitud_docente: float = Field(..., ge=-180, le=180)
     direccion_referencia: Optional[str] = None
+    fecha_inicio: Optional[datetime] = None  # ← AÑADIR ESTE CAMPO
 
     @validator("titulo")
     def titulo_no_vacio(cls, v):
         if not v.strip():
             raise ValueError("El título no puede estar vacío")
         return v.strip()
+
+    @validator("fecha_inicio", pre=True, always=True)
+    def set_fecha_inicio_default(cls, v):
+        """Si no se proporciona fecha_inicio, usar la fecha actual"""
+        if v is None:
+            return datetime.now()
+        return v
+
+    @validator("periodo_id")
+    def validar_periodo_opcional(cls, v, values):
+        """
+        Si se proporciona periodo_id, debe ser válido.
+        Si no se proporciona, se detectará automáticamente.
+        """
+        if v is not None and v <= 0:
+            raise ValueError("El periodo_id debe ser un número positivo")
+        return v
 
 
 class MarcarAsistenciaRequest(BaseModel):

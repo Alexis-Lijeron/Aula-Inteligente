@@ -12,13 +12,17 @@ import logging
 
 from sqlalchemy import func
 from app.models.prediccion_rendimiento import PrediccionRendimiento
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class PredictionService:
-    def __init__(self, models_path: str = "ml_system\scripts\modelos"):
+    def __init__(
+        self,  # models_path: str = "ml_system\scripts\modelos"
+        models_path: str = os.path.join("ml_system", "scripts", "modelos"),
+    ):
         """
         Inicializa el servicio de predicción
 
@@ -446,9 +450,9 @@ class PredictionService:
         except Exception as e:
             logger.error(f"Error prediciendo para estudiante {estudiante_id}: {str(e)}")
             raise
-    
+
     def predecir_estudiante_por_bd2(
-    self, db, estudiante_id: int, materia_id: int, periodo_id: int
+        self, db, estudiante_id: int, materia_id: int, periodo_id: int
     ) -> Dict:
         """
         Predice el rendimiento de un estudiante a partir de la base de datos
@@ -545,11 +549,15 @@ class PredictionService:
             prediccion = self.predecir_rendimiento(datos)
 
             # Verificar si ya existe una predicción previa para este estudiante-materia-periodo
-            existente = db.query(PrediccionRendimiento).filter_by(
-                estudiante_id=estudiante_id,
-                materia_id=materia_id,
-                periodo_id=periodo_id,
-            ).first()
+            existente = (
+                db.query(PrediccionRendimiento)
+                .filter_by(
+                    estudiante_id=estudiante_id,
+                    materia_id=materia_id,
+                    periodo_id=periodo_id,
+                )
+                .first()
+            )
 
             if existente:
                 # Actualizar valores
@@ -592,9 +600,9 @@ class PredictionService:
         except Exception as e:
             logger.error(f"Error prediciendo para estudiante {estudiante_id}: {str(e)}")
             raise
-    
+
     def predecir_estudiante_por_bd(
-    self, db, estudiante_id: int, materia_id: int, periodo_id: int
+        self, db, estudiante_id: int, materia_id: int, periodo_id: int
     ) -> Dict:
         """
         Predice el rendimiento de un estudiante usando promedio ponderado real por tipo de evaluación.
@@ -677,12 +685,14 @@ class PredictionService:
                 elif tipo.nombre.lower() == "participaciones":
                     promedio_participacion = round(promedio, 2)
 
-                detalle.append({
-                    "tipo": tipo.nombre,
-                    "promedio": round(promedio, 2),
-                    "peso": peso.porcentaje,
-                    "aporte": round(aporte, 2),
-                })
+                detalle.append(
+                    {
+                        "tipo": tipo.nombre,
+                        "promedio": round(promedio, 2),
+                        "peso": peso.porcentaje,
+                        "aporte": round(aporte, 2),
+                    }
+                )
 
             promedio_notas_anterior = round(nota_final, 2)
 
@@ -700,11 +710,15 @@ class PredictionService:
             prediccion = self.predecir_rendimiento(datos)
 
             # Guardar o actualizar en PrediccionRendimiento
-            existente = db.query(PrediccionRendimiento).filter_by(
-                estudiante_id=estudiante_id,
-                materia_id=materia_id,
-                periodo_id=periodo_id,
-            ).first()
+            existente = (
+                db.query(PrediccionRendimiento)
+                .filter_by(
+                    estudiante_id=estudiante_id,
+                    materia_id=materia_id,
+                    periodo_id=periodo_id,
+                )
+                .first()
+            )
 
             if existente:
                 existente.promedio_notas = promedio_notas_anterior
@@ -771,7 +785,6 @@ class PredictionService:
             logger.error(f"Error prediciendo estudiante {estudiante_id}: {str(e)}")
             raise
 
-    
     def predecir_lote_estudiantes(
         self, db, curso_id: int, materia_id: int, periodo_id: int
     ) -> List[Dict]:
@@ -1114,4 +1127,3 @@ if __name__ == "__main__":
 
     else:
         print("❌ Modelos no cargados. Asegúrate de haber ejecutado el entrenamiento.")
-

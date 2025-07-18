@@ -78,20 +78,37 @@ def crear_sesion_asistencia(
     El docente establece su ubicación GPS y crea una sesión donde los estudiantes
     podrán marcar asistencia solo si están dentro del radio permitido.
 
+    **Funcionalidad automática:**
+    - Si no se proporciona `periodo_id`, se detecta automáticamente basado en `fecha_inicio`
+    - El sistema busca el periodo activo que contenga la fecha de la sesión
+
     **Parámetros importantes:**
     - `latitud_docente`, `longitud_docente`: Ubicación GPS del aula/docente
     - `radio_permitido_metros`: Radio en metros (por defecto 100m)
     - `permite_asistencia_tardia`: Si permite marcar después del inicio
     - `minutos_tolerancia`: Minutos extra para llegar tarde
+    - `periodo_id`: OPCIONAL - Si no se proporciona, se detecta automáticamente
     """
     try:
         docente_id = obtener_docente_id(payload)
 
         sesion = crud.crear_sesion_asistencia(db, datos, docente_id)
 
+        # Obtener información del periodo para mostrar en la respuesta
+        periodo_info = ""
+        if sesion.periodo_id:
+            from app.models.periodo import Periodo
+
+            periodo = db.query(Periodo).filter(Periodo.id == sesion.periodo_id).first()
+            if periodo:
+                periodo_info = f" (Periodo: {periodo.nombre})"
+
         return SesionAsistenciaResponse(
             success=True,
-            message=f"Sesión '{sesion.titulo}' creada exitosamente. {sesion.total_estudiantes_esperados} estudiantes pueden marcar asistencia.",
+            message=(
+                f"Sesión '{sesion.titulo}' creada exitosamente{periodo_info}. "
+                f"{sesion.total_estudiantes_esperados} estudiantes pueden marcar asistencia."
+            ),
             data=SesionAsistenciaOut.from_orm(sesion),
         )
 

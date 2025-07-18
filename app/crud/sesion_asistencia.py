@@ -70,7 +70,25 @@ def validar_ubicacion_estudiante(
 def crear_sesion_asistencia(
     db: Session, datos: SesionAsistenciaCreate, docente_id: int
 ) -> SesionAsistencia:
-    """Crear una nueva sesión de asistencia"""
+    """Crear una nueva sesión de asistencia con detección automática de periodo"""
+
+    # Convertir los datos a dict para poder modificarlos
+    datos_dict = datos.dict()
+
+    # Si no se proporciona periodo_id, detectarlo automáticamente
+    if not datos_dict.get("periodo_id"):
+        try:
+            periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(
+                db, datos.fecha_inicio or datetime.now()
+            )
+            datos_dict["periodo_id"] = periodo_id
+
+            print(
+                f"🔍 Periodo detectado automáticamente: {periodo_id} (Gestión: {gestion_id})"
+            )
+
+        except ValueError as e:
+            raise ValueError(f"Error al detectar periodo automáticamente: {str(e)}")
 
     # Verificar que no haya otra sesión activa para la misma materia y curso
     sesion_existente = (
@@ -78,8 +96,8 @@ def crear_sesion_asistencia(
         .filter(
             and_(
                 SesionAsistencia.docente_id == docente_id,
-                SesionAsistencia.curso_id == datos.curso_id,
-                SesionAsistencia.materia_id == datos.materia_id,
+                SesionAsistencia.curso_id == datos_dict["curso_id"],
+                SesionAsistencia.materia_id == datos_dict["materia_id"],
                 SesionAsistencia.estado == "activa",
             )
         )
@@ -89,8 +107,8 @@ def crear_sesion_asistencia(
     if sesion_existente:
         raise ValueError("Ya existe una sesión activa para esta materia y curso")
 
-    # Crear la sesión
-    sesion = SesionAsistencia(**datos.dict(), docente_id=docente_id)
+    # Crear la sesión con el periodo detectado
+    sesion = SesionAsistencia(**datos_dict, docente_id=docente_id)
 
     db.add(sesion)
     db.commit()
@@ -552,3 +570,28 @@ def obtener_estadisticas_sesion(db: Session, sesion_id: int) -> Dict:
         "justificados": justificados,
         "porcentaje_asistencia": round(porcentaje_asistencia, 2),
     }
+
+
+def obtener_periodo_y_gestion_por_fecha(db: Session, fecha):
+    """
+    Obtiene el periodo y gestión correspondiente a una fecha específica
+    """
+    from app.models.periodo import Periodo
+
+    # Si fecha es datetime, convertir a date
+    if hasattr(fecha, "date"):
+        fecha = fecha.date()
+
+    periodo = (
+        db.query(Periodo)
+        .filter(Periodo.fecha_inicio <= fecha, Periodo.fecha_fin >= fecha)
+        .first()
+    )
+
+    if not periodo:
+        raise ValueError(
+            f"La fecha {fecha} no coincide con ningún periodo activo. "
+            f"Verifique que exista un periodo configurado que incluya esta fecha."
+        )
+
+    return periodo.id, periodo.gestion_id
