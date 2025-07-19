@@ -11,7 +11,7 @@ from app.crud import evaluacion as crud
 from app.auth.roles import docente_o_admin_required, usuario_autenticado
 from app.models.tipo_evaluacion import TipoEvaluacion
 
-# 🆕 NUEVO: Imports para el sistema de notificaciones
+# 🆕 ACTUALIZADO: Imports para el sistema de notificaciones DUAL
 from app.services.notification_service import NotificationService
 import logging
 
@@ -28,39 +28,65 @@ def get_db():
         db.close()
 
 
-# 🆕 NUEVA: Función helper para manejar notificaciones automáticas
-def _verificar_y_notificar_calificacion_baja(db: Session, evaluacion: Evaluacion):
-    """Helper para verificar y enviar notificaciones de calificaciones bajas"""
-    if evaluacion and evaluacion.valor < 50:
-        try:
-            notificaciones = (
-                NotificationService.verificar_y_notificar_calificacion_baja(
-                    db, evaluacion.id
-                )
+# 🆕 ACTUALIZADA: Función helper para manejar notificaciones automáticas con sistema DUAL
+def _enviar_notificaciones_duales(
+    db: Session, evaluacion: Evaluacion, umbral_padres: float = 50.0
+):
+    """Helper para enviar notificaciones duales: SIEMPRE a estudiante, solo a padres si está debajo del umbral"""
+    if not evaluacion:
+        return {"estudiante": 0, "padres": 0}
+
+    try:
+        resultado = NotificationService.notificar_evaluacion_completa(
+            db, evaluacion.id, umbral_padres
+        )
+
+        if "error" not in resultado:
+            total_estudiante = len(resultado.get("estudiante", []))
+            total_padres = len(resultado.get("padres", []))
+
+            logger.info(
+                f"Notificaciones enviadas para evaluación {evaluacion.id} (valor: {evaluacion.valor}): "
+                f"{total_estudiante} estudiante, {total_padres} padres"
             )
-            if notificaciones:
-                logger.info(
-                    f"Enviadas {len(notificaciones)} notificaciones para evaluación {evaluacion.id} (valor: {evaluacion.valor})"
-                )
-            return len(notificaciones)
-        except Exception as e:
-            logger.error(
-                f"Error enviando notificaciones para evaluación {evaluacion.id}: {e}"
-            )
-            return 0
-    return 0
+
+            return {
+                "estudiante": total_estudiante,
+                "padres": total_padres,
+                "evaluacion_valor": resultado.get("evaluacion_valor"),
+                "umbral_usado": resultado.get("umbral_usado"),
+                "notificacion_padre_activada": resultado.get(
+                    "notificacion_padre_activada", False
+                ),
+            }
+        else:
+            logger.error(f"Error en notificaciones duales: {resultado['error']}")
+            return {"estudiante": 0, "padres": 0, "error": resultado["error"]}
+
+    except Exception as e:
+        logger.error(
+            f"Error enviando notificaciones duales para evaluación {evaluacion.id}: {e}"
+        )
+        return {"estudiante": 0, "padres": 0, "error": str(e)}
 
 
 @router.post("/", response_model=EvaluacionOut)
 def crear(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    # 🆕 ACTUALIZADO: Usar sistema dual de notificaciones
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+
+    # Agregar información de notificaciones a la respuesta
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -88,6 +114,9 @@ def obtener(
 def actualizar(
     evaluacion_id: int,
     datos: EvaluacionUpdate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
@@ -95,8 +124,12 @@ def actualizar(
     if not e:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
 
-    # 🆕 NUEVO: Verificar y notificar si la actualización resultó en calificación baja
-    _verificar_y_notificar_calificacion_baja(db, e)
+    # 🆕 ACTUALIZADO: Usar sistema dual de notificaciones
+    resultado_notif = _enviar_notificaciones_duales(db, e, umbral_padres)
+
+    # Agregar información de notificaciones a la respuesta
+    e_dict = e.__dict__.copy()
+    e_dict["notificaciones_info"] = resultado_notif
 
     return e
 
@@ -126,17 +159,22 @@ def obtener_id_tipo(db: Session, nombre_tipo: str) -> int:
     return tipo.id
 
 
+# 🆕 ACTUALIZADO: Todos los endpoints de registro ahora usan sistema dual
 @router.post("/registrar/examen", response_model=EvaluacionOut)
 def registrar_examen(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Exámenes")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -144,14 +182,18 @@ def registrar_examen(
 @router.post("/registrar/tarea", response_model=EvaluacionOut)
 def registrar_tarea(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Tareas")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -159,14 +201,18 @@ def registrar_tarea(
 @router.post("/registrar/exposicion", response_model=EvaluacionOut)
 def registrar_exposicion(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Exposiciones")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -174,14 +220,18 @@ def registrar_exposicion(
 @router.post("/registrar/participacion", response_model=EvaluacionOut)
 def registrar_participacion(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Participaciones")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -189,14 +239,18 @@ def registrar_participacion(
 @router.post("/registrar/asistencia", response_model=EvaluacionOut)
 def registrar_asistencia(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Asistencia")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -204,14 +258,18 @@ def registrar_asistencia(
 @router.post("/registrar/practica", response_model=EvaluacionOut)
 def registrar_practica(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Prácticas")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -219,14 +277,18 @@ def registrar_practica(
 @router.post("/registrar/proyecto", response_model=EvaluacionOut)
 def registrar_proyecto_final(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Proyecto final")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -234,14 +296,18 @@ def registrar_proyecto_final(
 @router.post("/registrar/grupal", response_model=EvaluacionOut)
 def registrar_trabajo_grupal(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Trabajo grupal")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -249,14 +315,18 @@ def registrar_trabajo_grupal(
 @router.post("/registrar/ensayo", response_model=EvaluacionOut)
 def registrar_ensayo(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Ensayos")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -264,14 +334,18 @@ def registrar_ensayo(
 @router.post("/registrar/cuestionario", response_model=EvaluacionOut)
 def registrar_cuestionario(
     datos: EvaluacionCreate,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     datos.tipo_evaluacion_id = obtener_id_tipo(db, "Cuestionarios")
     evaluacion = crud.crear_evaluacion(db, datos)
 
-    # 🆕 NUEVO: Verificar y notificar si es calificación baja
-    _verificar_y_notificar_calificacion_baja(db, evaluacion)
+    resultado_notif = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+    evaluacion_dict = evaluacion.__dict__.copy()
+    evaluacion_dict["notificaciones_info"] = resultado_notif
 
     return evaluacion
 
@@ -596,12 +670,16 @@ def registrar_asistencia_masiva(
     materia_id: int,
     fecha: date,
     estudiantes: list[dict],
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
     registros = []
-    notificaciones_enviadas = 0  # 🆕 NUEVO: Contador de notificaciones
+    notificaciones_estudiante = 0
+    notificaciones_padres = 0
 
     for est in estudiantes:
         est_id = est["id"]
@@ -639,35 +717,39 @@ def registrar_asistencia_masiva(
 
     db.commit()
 
-    # 🆕 NUEVO: Verificar notificaciones para asistencias con valor < 50
+    # 🆕 ACTUALIZADO: Usar sistema dual para asistencias
     for est in estudiantes:
         est_id = est["id"]
         estado = est["estado"].lower()
         valor, _ = estado_valores[estado]
 
-        if valor < 50:  # Falta o tarde
-            evaluacion_creada = (
-                db.query(Evaluacion)
-                .filter_by(
-                    estudiante_id=est_id,
-                    materia_id=materia_id,
-                    periodo_id=periodo_id,
-                    fecha=fecha,
-                    tipo_evaluacion_id=5,
-                    valor=valor,
-                )
-                .first()
+        evaluacion_creada = (
+            db.query(Evaluacion)
+            .filter_by(
+                estudiante_id=est_id,
+                materia_id=materia_id,
+                periodo_id=periodo_id,
+                fecha=fecha,
+                tipo_evaluacion_id=5,
+                valor=valor,
             )
+            .first()
+        )
 
-            if evaluacion_creada:
-                count = _verificar_y_notificar_calificacion_baja(db, evaluacion_creada)
-                notificaciones_enviadas += count
+        if evaluacion_creada:
+            resultado = _enviar_notificaciones_duales(
+                db, evaluacion_creada, umbral_padres
+            )
+            notificaciones_estudiante += resultado.get("estudiante", 0)
+            notificaciones_padres += resultado.get("padres", 0)
 
     return {
         "mensaje": f"Asistencia registrada para estudiantes: {registros}",
         "periodo_id": periodo_id,
         "gestion_id": gestion_id,
-        "notificaciones_enviadas": notificaciones_enviadas,  # 🆕 NUEVO
+        "notificaciones_estudiante": notificaciones_estudiante,
+        "notificaciones_padres": notificaciones_padres,
+        "umbral_usado": umbral_padres,
     }
 
 
@@ -678,12 +760,16 @@ def registrar_participacion_masiva(
     materia_id: int,
     fecha: date,
     estudiantes: list[dict],
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
     periodo_id, gestion_id = obtener_periodo_y_gestion_por_fecha(db, fecha)
     registros = []
-    notificaciones_enviadas = 0  # 🆕 NUEVO: Contador de notificaciones
+    notificaciones_estudiante = 0
+    notificaciones_padres = 0
 
     for est in estudiantes:
         est_id = est["id"]
@@ -710,34 +796,38 @@ def registrar_participacion_masiva(
 
     db.commit()
 
-    # 🆕 NUEVO: Verificar notificaciones para participaciones bajas
+    # 🆕 ACTUALIZADO: Usar sistema dual para participaciones
     for est in estudiantes:
         est_id = est["id"]
         valor = est["valor"]
 
-        if valor < 50:
-            evaluacion_creada = (
-                db.query(Evaluacion)
-                .filter_by(
-                    estudiante_id=est_id,
-                    materia_id=materia_id,
-                    periodo_id=periodo_id,
-                    fecha=fecha,
-                    tipo_evaluacion_id=4,
-                    valor=valor,
-                )
-                .first()
+        evaluacion_creada = (
+            db.query(Evaluacion)
+            .filter_by(
+                estudiante_id=est_id,
+                materia_id=materia_id,
+                periodo_id=periodo_id,
+                fecha=fecha,
+                tipo_evaluacion_id=4,
+                valor=valor,
             )
+            .first()
+        )
 
-            if evaluacion_creada:
-                count = _verificar_y_notificar_calificacion_baja(db, evaluacion_creada)
-                notificaciones_enviadas += count
+        if evaluacion_creada:
+            resultado = _enviar_notificaciones_duales(
+                db, evaluacion_creada, umbral_padres
+            )
+            notificaciones_estudiante += resultado.get("estudiante", 0)
+            notificaciones_padres += resultado.get("padres", 0)
 
     return {
         "mensaje": f"Participaciones registradas para estudiantes: {registros}",
         "periodo_id": periodo_id,
         "gestion_id": gestion_id,
-        "notificaciones_enviadas": notificaciones_enviadas,  # 🆕 NUEVO
+        "notificaciones_estudiante": notificaciones_estudiante,
+        "notificaciones_padres": notificaciones_padres,
+        "umbral_usado": umbral_padres,
     }
 
 
@@ -849,6 +939,9 @@ def registrar_evaluaciones_masiva(
     fecha: date,
     estudiantes: list[dict],  # [{"id": 1, "valor": 85, "descripcion": "opcional"}]
     descripcion_general: str = None,
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
+    ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
@@ -862,7 +955,8 @@ def registrar_evaluaciones_masiva(
 
     tipo_nombre = tipo.nombre
     registros = []
-    notificaciones_enviadas = 0  # 🆕 NUEVO: Contador de notificaciones
+    notificaciones_estudiante = 0
+    notificaciones_padres = 0
 
     for est in estudiantes:
         est_id = est["id"]
@@ -890,105 +984,115 @@ def registrar_evaluaciones_masiva(
 
     db.commit()
 
-    # 🆕 NUEVO: Verificar y notificar calificaciones bajas
+    # 🆕 ACTUALIZADO: Usar sistema dual para evaluaciones masivas
     for est in estudiantes:
         est_id = est["id"]
         valor = est["valor"]
 
-        if valor < 50:
-            # Buscar la evaluación recién creada
-            evaluacion_creada = (
-                db.query(Evaluacion)
-                .filter(
-                    Evaluacion.estudiante_id == est_id,
-                    Evaluacion.materia_id == materia_id,
-                    Evaluacion.tipo_evaluacion_id == tipo_evaluacion_id,
-                    Evaluacion.fecha == fecha,
-                    Evaluacion.valor == valor,
-                )
-                .order_by(Evaluacion.id.desc())
-                .first()
+        # Buscar la evaluación recién creada
+        evaluacion_creada = (
+            db.query(Evaluacion)
+            .filter(
+                Evaluacion.estudiante_id == est_id,
+                Evaluacion.materia_id == materia_id,
+                Evaluacion.tipo_evaluacion_id == tipo_evaluacion_id,
+                Evaluacion.fecha == fecha,
+                Evaluacion.valor == valor,
             )
+            .order_by(Evaluacion.id.desc())
+            .first()
+        )
 
-            if evaluacion_creada:
-                count = _verificar_y_notificar_calificacion_baja(db, evaluacion_creada)
-                notificaciones_enviadas += count
+        if evaluacion_creada:
+            resultado = _enviar_notificaciones_duales(
+                db, evaluacion_creada, umbral_padres
+            )
+            notificaciones_estudiante += resultado.get("estudiante", 0)
+            notificaciones_padres += resultado.get("padres", 0)
 
     return {
         "mensaje": f"Evaluaciones '{tipo_nombre}' registradas para estudiantes: {registros}",
         "periodo_id": periodo_id,
         "gestion_id": gestion_id,
         "tipo_evaluacion": tipo_nombre,
-        "notificaciones_enviadas": notificaciones_enviadas,  # 🆕 NUEVO
+        "notificaciones_estudiante": notificaciones_estudiante,
+        "notificaciones_padres": notificaciones_padres,
+        "umbral_usado": umbral_padres,
     }
 
 
-# 🆕 NUEVO: Endpoint para verificar notificaciones manualmente
-@router.post("/verificar-notificaciones/{evaluacion_id}")
-def verificar_notificaciones_evaluacion(
+# 🆕 ACTUALIZADO: Endpoint para verificar notificaciones con sistema dual
+@router.post("/verificar-notificaciones-duales/{evaluacion_id}")
+def verificar_notificaciones_evaluacion_dual(
     evaluacion_id: int,
-    umbral: float = Query(
-        50.0, ge=0, le=100, description="Umbral mínimo para notificar"
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
     ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
-    """🔔 Verificar manualmente si una evaluación necesita notificaciones"""
+    """🔔 Verificar notificaciones con sistema dual: SIEMPRE estudiante, padres solo si está debajo del umbral"""
     try:
-        notificaciones = NotificationService.verificar_y_notificar_calificacion_baja(
-            db, evaluacion_id, umbral
-        )
+        evaluacion = db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
+        if not evaluacion:
+            raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+
+        resultado = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
 
         return {
             "success": True,
-            "mensaje": f"{len(notificaciones)} notificaciones enviadas",
-            "notificaciones_ids": notificaciones,
-            "umbral_usado": umbral,
+            "mensaje": f"Notificaciones duales: {resultado.get('estudiante', 0)} estudiante, {resultado.get('padres', 0)} padres",
+            "notificaciones_estudiante": resultado.get("estudiante", 0),
+            "notificaciones_padres": resultado.get("padres", 0),
+            "umbral_usado": umbral_padres,
             "evaluacion_id": evaluacion_id,
+            "evaluacion_valor": resultado.get("evaluacion_valor"),
+            "notificacion_padre_activada": resultado.get(
+                "notificacion_padre_activada", False
+            ),
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(
-            f"Error verificando notificaciones para evaluación {evaluacion_id}: {e}"
+            f"Error verificando notificaciones duales para evaluación {evaluacion_id}: {e}"
         )
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 
-# 🆕 NUEVO: Endpoint para reenviar notificaciones de evaluaciones existentes
-@router.post("/reenviar-notificaciones-bajas")
-def reenviar_notificaciones_calificaciones_bajas(
+# 🆕 ACTUALIZADO: Endpoint para reenviar notificaciones con sistema dual
+@router.post("/reenviar-notificaciones-duales")
+def reenviar_notificaciones_sistema_dual(
     materia_id: int = Query(..., description="ID de la materia"),
     periodo_id: int = Query(..., description="ID del periodo"),
-    umbral: float = Query(
-        50.0, ge=0, le=100, description="Umbral para calificaciones bajas"
+    umbral_padres: float = Query(
+        50.0, ge=0, le=100, description="Umbral para notificar a padres"
     ),
     db: Session = Depends(get_db),
     payload: dict = Depends(docente_o_admin_required),
 ):
-    """🔄 Reenviar notificaciones para todas las calificaciones bajas existentes"""
+    """🔄 Reenviar notificaciones duales para todas las evaluaciones existentes"""
     try:
-        # Buscar todas las evaluaciones con valor menor al umbral
-        evaluaciones_bajas = (
+        # Buscar todas las evaluaciones del periodo y materia
+        evaluaciones = (
             db.query(Evaluacion)
             .filter(
                 Evaluacion.materia_id == materia_id,
                 Evaluacion.periodo_id == periodo_id,
-                Evaluacion.valor < umbral,
             )
             .all()
         )
 
-        total_notificaciones = 0
+        total_notificaciones_estudiante = 0
+        total_notificaciones_padres = 0
         evaluaciones_procesadas = 0
 
-        for evaluacion in evaluaciones_bajas:
+        for evaluacion in evaluaciones:
             try:
-                notificaciones = (
-                    NotificationService.verificar_y_notificar_calificacion_baja(
-                        db, evaluacion.id, umbral
-                    )
-                )
-                total_notificaciones += len(notificaciones)
+                resultado = _enviar_notificaciones_duales(db, evaluacion, umbral_padres)
+                total_notificaciones_estudiante += resultado.get("estudiante", 0)
+                total_notificaciones_padres += resultado.get("padres", 0)
                 evaluaciones_procesadas += 1
             except Exception as e:
                 logger.error(f"Error procesando evaluación {evaluacion.id}: {e}")
@@ -996,16 +1100,21 @@ def reenviar_notificaciones_calificaciones_bajas(
 
         return {
             "success": True,
-            "mensaje": f"Proceso completado: {total_notificaciones} notificaciones enviadas",
+            "mensaje": f"Proceso dual completado: {total_notificaciones_estudiante} notif. estudiantes, {total_notificaciones_padres} notif. padres",
             "evaluaciones_procesadas": evaluaciones_procesadas,
-            "total_evaluaciones_bajas": len(evaluaciones_bajas),
-            "notificaciones_enviadas": total_notificaciones,
-            "umbral_usado": umbral,
+            "total_evaluaciones": len(evaluaciones),
+            "notificaciones_estudiante": total_notificaciones_estudiante,
+            "notificaciones_padres": total_notificaciones_padres,
+            "umbral_usado": umbral_padres,
         }
 
     except Exception as e:
-        logger.error(f"Error en reenviar_notificaciones_calificaciones_bajas: {e}")
+        logger.error(f"Error en reenviar_notificaciones_sistema_dual: {e}")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+
+# Mantener todos los demás endpoints del código original sin cambios...
+# (resumen endpoints, etc.)
 
 
 @router.get("/resumen/por-estudiante-periodo", response_model=dict)

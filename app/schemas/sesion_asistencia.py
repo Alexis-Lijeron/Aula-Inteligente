@@ -32,7 +32,7 @@ class SesionAsistenciaBase(BaseModel):
     curso_id: int
     materia_id: int
     periodo_id: Optional[int] = None
-    duracion_minutos: int = Field(default=60, ge=10, le=20)  # Entre 10 min y 20 min
+    duracion_minutos: int = Field(default=60, ge=10, le=300)  # Entre 10 min y 300 min
     radio_permitido_metros: int = Field(default=100, ge=10, le=100)  # Entre 10m y 100m
     permite_asistencia_tardia: bool = True
     minutos_tolerancia: int = Field(default=15, ge=0, le=60)

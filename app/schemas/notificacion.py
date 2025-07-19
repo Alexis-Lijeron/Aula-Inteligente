@@ -10,17 +10,19 @@ class NotificacionBase(BaseModel):
 
 
 class NotificacionCreate(NotificacionBase):
-    padre_id: int
+    padre_id: Optional[int] = None  # Ahora es opcional
     estudiante_id: int
     evaluacion_id: Optional[int] = None
+    para_estudiante: bool = False  # Nuevo campo
 
 
 class NotificacionOut(NotificacionBase):
     id: int
     leida: bool
-    padre_id: int
+    padre_id: Optional[int]  # Ahora es opcional
     estudiante_id: int
     evaluacion_id: Optional[int]
+    para_estudiante: bool  # Nuevo campo
     created_at: datetime
     updated_at: Optional[datetime]
 

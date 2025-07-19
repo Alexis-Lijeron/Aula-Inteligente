@@ -24,10 +24,13 @@ class Notificacion(Base):
     leida = Column(Boolean, default=False)
 
     # Relaciones
-    padre_id = Column(Integer, ForeignKey("padres.id"), nullable=False)
+    padre_id = Column(Integer, ForeignKey("padres.id"), nullable=True)
     estudiante_id = Column(Integer, ForeignKey("estudiantes.id"), nullable=False)
     evaluacion_id = Column(Integer, ForeignKey("evaluaciones.id"), nullable=True)
 
+    # NUEVO: Campo para indicar si la notificación es para el estudiante directamente
+    para_estudiante = Column(Boolean, default=False)
+    
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

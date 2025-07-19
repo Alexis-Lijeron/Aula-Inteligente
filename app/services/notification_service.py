@@ -1,11 +1,7 @@
-# app/services/notification_service.py
-from sqlalchemy.orm import Session
-from app.crud import notificacion as crud_notificacion
-from app.models.padre_estudiante import PadreEstudiante
-from app.models.evaluacion import Evaluacion
-from app.models.estudiante import Estudiante
-from app.models.materia import Materia
-from app.models.tipo_evaluacion import TipoEvaluacion
+# app/services/notification_service.py - SERVICIO ACTUALIZADO
+
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import desc
 from app.schemas.notificacion import NotificacionCreate
 from typing import List, Optional
 import logging
@@ -14,238 +10,188 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationService:
-
     @staticmethod
-    def verificar_y_notificar_calificacion_baja(
-        db: Session, evaluacion_id: int, umbral: float = 50.0
-    ) -> List[int]:
+    def notificar_evaluacion_completa(
+        db: Session, evaluacion_id: int, umbral_padres: float = 50.0
+    ) -> dict:
         """
-        Verificar si una evaluación tiene calificación baja (< umbral)
-        y notificar a los padres correspondientes
-
-        Args:
-            db: Sesión de base de datos
-            evaluacion_id: ID de la evaluación a verificar
-            umbral: Valor mínimo para considerar calificación baja (default: 50.0)
-
-        Returns:
-            Lista de IDs de notificaciones creadas
+        Notificación completa:
+        - SIEMPRE notifica al estudiante (sin umbral)
+        - Solo notifica a padres si está debajo del umbral
         """
         try:
-            # Obtener la evaluación con toda la información necesaria
+            from app.models.evaluacion import Evaluacion
+            from app.models.padre_estudiante import PadreEstudiante
+            from app.crud import notificacion as crud_notificacion
+
+            # Obtener la evaluación
             evaluacion = (
                 db.query(Evaluacion)
-                .join(Estudiante, Evaluacion.estudiante_id == Estudiante.id)
-                .join(Materia, Evaluacion.materia_id == Materia.id)
-                .join(
-                    TipoEvaluacion, Evaluacion.tipo_evaluacion_id == TipoEvaluacion.id
+                .options(
+                    joinedload(Evaluacion.estudiante),
+                    joinedload(Evaluacion.materia),
+                    joinedload(Evaluacion.tipo_evaluacion),
                 )
                 .filter(Evaluacion.id == evaluacion_id)
                 .first()
             )
 
             if not evaluacion:
-                logger.warning(f"Evaluación {evaluacion_id} no encontrada")
-                return []
+                logger.error(f"Evaluación {evaluacion_id} no encontrada")
+                return {
+                    "estudiante": [],
+                    "padres": [],
+                    "error": "Evaluación no encontrada",
+                }
 
-            # Verificar si la calificación es menor al umbral
-            if evaluacion.valor >= umbral:
-                logger.info(
-                    f"Evaluación {evaluacion_id} tiene valor {evaluacion.valor} >= {umbral}, no se envía notificación"
-                )
-                return []
+            notificaciones_estudiante = []
+            notificaciones_padres = []
 
-            # Encontrar todos los padres del estudiante
-            padres = (
-                db.query(PadreEstudiante.padre_id)
-                .filter(PadreEstudiante.estudiante_id == evaluacion.estudiante_id)
-                .all()
+            # 1. SIEMPRE crear notificación para el estudiante
+            titulo_estudiante = f"📝 Nueva Calificación - {evaluacion.materia.nombre}"
+            mensaje_estudiante = (
+                f"Tu calificación en {evaluacion.descripcion} "
+                f"de la materia {evaluacion.materia.nombre} es: {evaluacion.valor} puntos. "
+                f"Fecha de evaluación: {evaluacion.fecha.strftime('%d/%m/%Y')}"
             )
 
-            if not padres:
-                logger.warning(
-                    f"No se encontraron padres para el estudiante {evaluacion.estudiante_id}"
+            # Verificar si ya existe notificación para el estudiante
+            notificacion_estudiante_existente = (
+                db.query(crud_notificacion.Notificacion)
+                .filter(
+                    crud_notificacion.Notificacion.estudiante_id
+                    == evaluacion.estudiante_id,
+                    crud_notificacion.Notificacion.evaluacion_id == evaluacion_id,
+                    crud_notificacion.Notificacion.para_estudiante == True,
                 )
-                return []
+                .first()
+            )
 
-            notificaciones_creadas = []
+            if not notificacion_estudiante_existente:
+                notificacion_data_estudiante = NotificacionCreate(
+                    titulo=titulo_estudiante,
+                    mensaje=mensaje_estudiante,
+                    tipo="evaluacion",
+                    padre_id=None,  # No tiene padre_id porque es para el estudiante
+                    estudiante_id=evaluacion.estudiante_id,
+                    evaluacion_id=evaluacion.id,
+                    para_estudiante=True,
+                )
 
-            for padre_relacion in padres:
-                padre_id = padre_relacion.padre_id
-
-                # Verificar si ya existe una notificación para esta evaluación y padre
-                notificacion_existente = (
-                    db.query(crud_notificacion.Notificacion)
-                    .filter(
-                        crud_notificacion.Notificacion.padre_id == padre_id,
-                        crud_notificacion.Notificacion.evaluacion_id == evaluacion_id,
-                        crud_notificacion.Notificacion.tipo == "calificacion_baja",
+                try:
+                    notificacion_estudiante = crud_notificacion.crear_notificacion(
+                        db, notificacion_data_estudiante
                     )
-                    .first()
-                )
-
-                if notificacion_existente:
+                    notificaciones_estudiante.append(notificacion_estudiante.id)
                     logger.info(
-                        f"Ya existe notificación para padre {padre_id} y evaluación {evaluacion_id}"
+                        f"Notificación creada para estudiante {evaluacion.estudiante_id} sobre evaluación {evaluacion_id}"
                     )
-                    continue
+                except Exception as e:
+                    logger.error(
+                        f"Error creando notificación para estudiante: {str(e)}"
+                    )
 
-                # Crear notificación personalizada
-                titulo = f"⚠️ Calificación Baja - {evaluacion.estudiante.nombre}"
-                mensaje = (
+            # 2. Solo crear notificación para padres si está debajo del umbral
+            if evaluacion.valor < umbral_padres:
+                # Obtener los padres del estudiante
+                padres = (
+                    db.query(PadreEstudiante)
+                    .filter(PadreEstudiante.estudiante_id == evaluacion.estudiante_id)
+                    .all()
+                )
+
+                titulo_padre = f"⚠️ Calificación Baja - {evaluacion.estudiante.nombre}"
+                mensaje_padre = (
                     f"Su hijo(a) {evaluacion.estudiante.nombre} {evaluacion.estudiante.apellido} "
                     f"obtuvo {evaluacion.valor} puntos en {evaluacion.descripcion} "
                     f"de la materia {evaluacion.materia.nombre}. "
                     f"Le recomendamos estar atento al rendimiento académico."
                 )
 
-                notificacion_data = NotificacionCreate(
-                    titulo=titulo,
-                    mensaje=mensaje,
-                    tipo="calificacion_baja",
-                    padre_id=padre_id,
-                    estudiante_id=evaluacion.estudiante_id,
-                    evaluacion_id=evaluacion.id,
-                )
+                for padre_relacion in padres:
+                    padre_id = padre_relacion.padre_id
 
-                try:
-                    notificacion = crud_notificacion.crear_notificacion(
-                        db, notificacion_data
-                    )
-                    notificaciones_creadas.append(notificacion.id)
-                    logger.info(
-                        f"Notificación creada para padre {padre_id} sobre evaluación {evaluacion_id}"
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Error creando notificación para padre {padre_id}: {str(e)}"
+                    # Verificar si ya existe notificación para este padre
+                    notificacion_padre_existente = (
+                        db.query(crud_notificacion.Notificacion)
+                        .filter(
+                            crud_notificacion.Notificacion.padre_id == padre_id,
+                            crud_notificacion.Notificacion.evaluacion_id
+                            == evaluacion_id,
+                            crud_notificacion.Notificacion.tipo == "calificacion_baja",
+                        )
+                        .first()
                     )
 
-            return notificaciones_creadas
+                    if not notificacion_padre_existente:
+                        notificacion_data_padre = NotificacionCreate(
+                            titulo=titulo_padre,
+                            mensaje=mensaje_padre,
+                            tipo="calificacion_baja",
+                            padre_id=padre_id,
+                            estudiante_id=evaluacion.estudiante_id,
+                            evaluacion_id=evaluacion.id,
+                            para_estudiante=False,
+                        )
+
+                        try:
+                            notificacion_padre = crud_notificacion.crear_notificacion(
+                                db, notificacion_data_padre
+                            )
+                            notificaciones_padres.append(notificacion_padre.id)
+                            logger.info(
+                                f"Notificación creada para padre {padre_id} sobre calificación baja {evaluacion_id}"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"Error creando notificación para padre {padre_id}: {str(e)}"
+                            )
+
+            return {
+                "estudiante": notificaciones_estudiante,
+                "padres": notificaciones_padres,
+                "evaluacion_valor": evaluacion.valor,
+                "umbral_usado": umbral_padres,
+                "notificacion_padre_activada": evaluacion.valor < umbral_padres,
+            }
 
         except Exception as e:
-            logger.error(f"Error en verificar_y_notificar_calificacion_baja: {str(e)}")
-            return []
+            logger.error(f"Error en notificar_evaluacion_completa: {str(e)}")
+            return {"estudiante": [], "padres": [], "error": str(e)}
 
     @staticmethod
-    def notificar_evaluacion_registrada(
+    def crear_notificacion_solo_estudiante(
         db: Session,
-        evaluacion_id: int,
-        solo_calificaciones_bajas: bool = True,
-        umbral: float = 50.0,
-    ) -> List[int]:
-        """
-        Notificar sobre una evaluación registrada.
-
-        Args:
-            db: Sesión de base de datos
-            evaluacion_id: ID de la evaluación
-            solo_calificaciones_bajas: Si True, solo notifica si el valor < umbral
-            umbral: Valor mínimo para considerar calificación baja
-
-        Returns:
-            Lista de IDs de notificaciones creadas
-        """
-        if solo_calificaciones_bajas:
-            return NotificationService.verificar_y_notificar_calificacion_baja(
-                db, evaluacion_id, umbral
-            )
-
-        # Lógica para notificar todas las evaluaciones (si se necesita en el futuro)
-        try:
-            evaluacion = (
-                db.query(Evaluacion).filter(Evaluacion.id == evaluacion_id).first()
-            )
-            if not evaluacion:
-                return []
-
-            padres = (
-                db.query(PadreEstudiante.padre_id)
-                .filter(PadreEstudiante.estudiante_id == evaluacion.estudiante_id)
-                .all()
-            )
-
-            notificaciones_creadas = []
-
-            for padre_relacion in padres:
-                padre_id = padre_relacion.padre_id
-
-                titulo = f"📝 Nueva Evaluación - {evaluacion.estudiante.nombre}"
-                mensaje = (
-                    f"Su hijo(a) {evaluacion.estudiante.nombre} {evaluacion.estudiante.apellido} "
-                    f"recibió una calificación de {evaluacion.valor} puntos en {evaluacion.descripcion}."
-                )
-
-                notificacion_data = NotificacionCreate(
-                    titulo=titulo,
-                    mensaje=mensaje,
-                    tipo="evaluacion",
-                    padre_id=padre_id,
-                    estudiante_id=evaluacion.estudiante_id,
-                    evaluacion_id=evaluacion.id,
-                )
-
-                try:
-                    notificacion = crud_notificacion.crear_notificacion(
-                        db, notificacion_data
-                    )
-                    notificaciones_creadas.append(notificacion.id)
-                except Exception as e:
-                    logger.error(
-                        f"Error creando notificación para padre {padre_id}: {str(e)}"
-                    )
-
-            return notificaciones_creadas
-
-        except Exception as e:
-            logger.error(f"Error en notificar_evaluacion_registrada: {str(e)}")
-            return []
-
-    @staticmethod
-    def crear_notificacion_personalizada(
-        db: Session,
-        padre_id: int,
         estudiante_id: int,
         titulo: str,
         mensaje: str,
         tipo: str = "general",
         evaluacion_id: Optional[int] = None,
     ) -> Optional[int]:
-        """
-        Crear una notificación personalizada
-
-        Args:
-            db: Sesión de base de datos
-            padre_id: ID del padre
-            estudiante_id: ID del estudiante
-            titulo: Título de la notificación
-            mensaje: Mensaje de la notificación
-            tipo: Tipo de notificación
-            evaluacion_id: ID de evaluación (opcional)
-
-        Returns:
-            ID de la notificación creada o None si hay error
-        """
+        """Crear notificación que solo va al estudiante"""
         try:
+            from app.crud import notificacion as crud_notificacion
+
             notificacion_data = NotificacionCreate(
                 titulo=titulo,
                 mensaje=mensaje,
                 tipo=tipo,
-                padre_id=padre_id,
+                padre_id=None,
                 estudiante_id=estudiante_id,
                 evaluacion_id=evaluacion_id,
+                para_estudiante=True,
             )
 
             notificacion = crud_notificacion.crear_notificacion(db, notificacion_data)
-            logger.info(f"Notificación personalizada creada: {notificacion.id}")
+            logger.info(f"Notificación solo-estudiante creada: {notificacion.id}")
             return notificacion.id
 
         except Exception as e:
-            logger.error(f"Error creando notificación personalizada: {str(e)}")
+            logger.error(f"Error creando notificación solo-estudiante: {str(e)}")
             return None
 
     @staticmethod
-    def notificar_a_todos_los_padres_del_estudiante(
+    def crear_notificacion_solo_padres(
         db: Session,
         estudiante_id: int,
         titulo: str,
@@ -253,23 +199,14 @@ class NotificationService:
         tipo: str = "general",
         evaluacion_id: Optional[int] = None,
     ) -> List[int]:
-        """
-        Enviar notificación a todos los padres de un estudiante
-
-        Args:
-            db: Sesión de base de datos
-            estudiante_id: ID del estudiante
-            titulo: Título de la notificación
-            mensaje: Mensaje de la notificación
-            tipo: Tipo de notificación
-            evaluacion_id: ID de evaluación (opcional)
-
-        Returns:
-            Lista de IDs de notificaciones creadas
-        """
+        """Crear notificación que solo va a los padres"""
         try:
+            from app.models.padre_estudiante import PadreEstudiante
+            from app.crud import notificacion as crud_notificacion
+
+            # Obtener todos los padres del estudiante
             padres = (
-                db.query(PadreEstudiante.padre_id)
+                db.query(PadreEstudiante)
                 .filter(PadreEstudiante.estudiante_id == estudiante_id)
                 .all()
             )
@@ -279,52 +216,109 @@ class NotificationService:
             for padre_relacion in padres:
                 padre_id = padre_relacion.padre_id
 
-                notificacion_id = NotificationService.crear_notificacion_personalizada(
-                    db, padre_id, estudiante_id, titulo, mensaje, tipo, evaluacion_id
+                notificacion_data = NotificacionCreate(
+                    titulo=titulo,
+                    mensaje=mensaje,
+                    tipo=tipo,
+                    padre_id=padre_id,
+                    estudiante_id=estudiante_id,
+                    evaluacion_id=evaluacion_id,
+                    para_estudiante=False,
                 )
 
-                if notificacion_id:
-                    notificaciones_creadas.append(notificacion_id)
+                try:
+                    notificacion = crud_notificacion.crear_notificacion(
+                        db, notificacion_data
+                    )
+                    notificaciones_creadas.append(notificacion.id)
+                except Exception as e:
+                    logger.error(
+                        f"Error creando notificación para padre {padre_id}: {str(e)}"
+                    )
 
             return notificaciones_creadas
 
         except Exception as e:
-            logger.error(
-                f"Error notificando a padres del estudiante {estudiante_id}: {str(e)}"
-            )
+            logger.error(f"Error en crear_notificacion_solo_padres: {str(e)}")
             return []
 
     @staticmethod
-    def limpiar_notificaciones_antiguas(db: Session, dias_antiguedad: int = 90) -> int:
-        """
-        Eliminar notificaciones antiguas (opcional, para mantenimiento)
-
-        Args:
-            db: Sesión de base de datos
-            dias_antiguedad: Días de antigüedad para considerar eliminar
-
-        Returns:
-            Número de notificaciones eliminadas
-        """
+    def migrar_evaluaciones_existentes(
+        db: Session, limite_dias: int = 30, umbral_padres: float = 50.0
+    ) -> dict:
+        """Migrar evaluaciones existentes para crear notificaciones de estudiantes"""
         try:
+            from app.models.evaluacion import Evaluacion
             from datetime import datetime, timedelta
 
-            fecha_limite = datetime.now() - timedelta(days=dias_antiguedad)
+            fecha_limite = datetime.now().date() - timedelta(days=limite_dias)
 
-            # Solo eliminar notificaciones leídas y antiguas
-            eliminadas = (
-                db.query(crud_notificacion.Notificacion)
-                .filter(
-                    crud_notificacion.Notificacion.leida == True,
-                    crud_notificacion.Notificacion.created_at < fecha_limite,
-                )
-                .delete()
+            # Obtener evaluaciones sin notificaciones para estudiantes
+            evaluaciones = (
+                db.query(Evaluacion).filter(Evaluacion.fecha >= fecha_limite).all()
             )
 
-            db.commit()
-            logger.info(f"Eliminadas {eliminadas} notificaciones antiguas")
-            return eliminadas
+            total_procesadas = 0
+            total_estudiante = 0
+            total_padres = 0
+
+            for evaluacion in evaluaciones:
+                resultado = NotificationService.notificar_evaluacion_completa(
+                    db, evaluacion.id, umbral_padres
+                )
+
+                if "error" not in resultado:
+                    total_procesadas += 1
+                    total_estudiante += len(resultado["estudiante"])
+                    total_padres += len(resultado["padres"])
+
+            return {
+                "evaluaciones_procesadas": total_procesadas,
+                "notificaciones_estudiante": total_estudiante,
+                "notificaciones_padres": total_padres,
+                "dias_migrados": limite_dias,
+                "umbral_usado": umbral_padres,
+            }
 
         except Exception as e:
-            logger.error(f"Error limpiando notificaciones antiguas: {str(e)}")
-            return 0
+            logger.error(f"Error en migración: {str(e)}")
+            return {"error": str(e)}
+
+    # Mantener funciones existentes para compatibilidad
+    @staticmethod
+    def verificar_y_notificar_calificacion_baja(
+        db: Session, evaluacion_id: int, umbral: float = 50.0
+    ) -> List[int]:
+        """Función de compatibilidad - ahora usa el sistema dual"""
+        resultado = NotificationService.notificar_evaluacion_completa(
+            db, evaluacion_id, umbral
+        )
+        # Retorna solo las notificaciones de padres para mantener compatibilidad
+        return resultado.get("padres", [])
+
+    @staticmethod
+    def notificar_evaluacion_registrada(
+        db: Session,
+        evaluacion_id: int,
+        solo_calificaciones_bajas: bool = True,
+        umbral: float = 50.0,
+    ) -> List[int]:
+        """Función de compatibilidad - ahora usa el sistema dual"""
+        if solo_calificaciones_bajas:
+            resultado = NotificationService.notificar_evaluacion_completa(
+                db, evaluacion_id, umbral
+            )
+            # Retorna notificaciones de padres y estudiantes
+            notificaciones = resultado.get("padres", []) + resultado.get(
+                "estudiante", []
+            )
+            return notificaciones
+        else:
+            # Forzar notificación (establecer umbral muy alto)
+            resultado = NotificationService.notificar_evaluacion_completa(
+                db, evaluacion_id, 100.0
+            )
+            notificaciones = resultado.get("padres", []) + resultado.get(
+                "estudiante", []
+            )
+            return notificaciones
