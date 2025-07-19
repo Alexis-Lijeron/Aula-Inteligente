@@ -1584,3 +1584,4 @@ def resumen_por_estudiante_docente_auto(
         "promedio_general": promedio_general,
         "resumen": resumen,
     }
+
