@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.schemas.sesion_asistencia import (
     SesionAsistenciaCreate,
+    SesionAsistenciaEstudianteOut,
     SesionAsistenciaUpdate,
     SesionAsistenciaOut,
     SesionAsistenciaDetalle,
@@ -363,7 +364,9 @@ def justificar_ausencia_estudiante(
 # ================ ENDPOINTS PARA ESTUDIANTES ================
 
 
-@router.get("/estudiante/sesiones-activas", response_model=List[SesionAsistenciaOut])
+@router.get(
+    "/estudiante/sesiones-activas", response_model=List[SesionAsistenciaEstudianteOut]
+)
 def obtener_mis_sesiones_activas(
     payload: dict = Depends(estudiante_required), db: Session = Depends(get_db)
 ):
@@ -371,13 +374,98 @@ def obtener_mis_sesiones_activas(
     🎓 **Obtener sesiones activas donde puedo marcar asistencia (ESTUDIANTE)**
 
     Lista las sesiones de asistencia activas en los cursos donde está inscrito el estudiante.
+    Incluye información de la materia, docente y estado de asistencia del estudiante.
     """
     try:
         estudiante_id = obtener_estudiante_id(payload)
 
+        # Usar la función existente de CRUD
         sesiones = crud.obtener_sesiones_activas_estudiante(db, estudiante_id)
 
-        return [SesionAsistenciaOut.from_orm(s) for s in sesiones]
+        # Construir manualmente los objetos del esquema con información adicional
+        sesiones_enriquecidas = []
+
+        for sesion in sesiones:
+            # Obtener información de la materia
+            from app.models.materia import Materia
+
+            materia = db.query(Materia).filter(Materia.id == sesion.materia_id).first()
+
+            # Obtener información del docente
+            from app.models.docente_materia import DocenteMateria
+            from app.models.docente import Docente
+
+            docente_materia = (
+                db.query(DocenteMateria)
+                .join(Docente, Docente.id == DocenteMateria.docente_id)
+                .filter(DocenteMateria.materia_id == sesion.materia_id)
+                .first()
+            )
+
+            # Obtener la asistencia del estudiante para esta sesión
+            from app.models.sesion_asistencia import AsistenciaEstudiante
+
+            mi_asistencia = (
+                db.query(AsistenciaEstudiante)
+                .filter(
+                    crud.and_(
+                        AsistenciaEstudiante.sesion_id == sesion.id,
+                        AsistenciaEstudiante.estudiante_id == estudiante_id,
+                    )
+                )
+                .first()
+            )
+
+            # Construir los objetos manualmente
+            materia_info = None
+            if materia:
+                from app.schemas.estudiante_info_academica import MateriaBasica
+
+                materia_info = MateriaBasica(
+                    id=materia.id,
+                    nombre=materia.nombre,
+                    descripcion=materia.descripcion,
+                    sigla=getattr(materia, "sigla", None),
+                )
+
+            docente_info = None
+            if docente_materia and docente_materia.docente:
+                from app.schemas.estudiante_info_academica import DocenteBasico
+
+                docente_info = DocenteBasico(
+                    id=docente_materia.docente.id,
+                    nombre=docente_materia.docente.nombre,
+                    apellido=docente_materia.docente.apellido,
+                    correo=docente_materia.docente.correo,
+                    telefono=docente_materia.docente.telefono,
+                )
+
+            asistencia_info = None
+            if mi_asistencia:
+                asistencia_info = AsistenciaEstudianteOut.from_orm(mi_asistencia)
+
+            # Crear el objeto del esquema manualmente
+            sesion_enriquecida = SesionAsistenciaEstudianteOut(
+                id=sesion.id,
+                titulo=sesion.titulo,
+                descripcion=sesion.descripcion,
+                fecha_inicio=sesion.fecha_inicio,
+                fecha_fin=sesion.fecha_fin,
+                duracion_minutos=sesion.duracion_minutos,
+                radio_permitido_metros=sesion.radio_permitido_metros,
+                permite_asistencia_tardia=sesion.permite_asistencia_tardia,
+                minutos_tolerancia=sesion.minutos_tolerancia,
+                estado=sesion.estado,
+                esta_activa=sesion.esta_activa,
+                fecha_creacion=sesion.fecha_creacion,
+                materia=materia_info,
+                docente=docente_info,
+                mi_asistencia=asistencia_info,
+            )
+
+            sesiones_enriquecidas.append(sesion_enriquecida)
+
+        return sesiones_enriquecidas
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

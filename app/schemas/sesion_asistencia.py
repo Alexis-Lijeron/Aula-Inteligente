@@ -287,3 +287,35 @@ class ValidacionUbicacionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+from app.schemas.estudiante_info_academica import DocenteBasico, MateriaBasica
+
+
+class SesionAsistenciaEstudianteOut(BaseModel):
+    """Sesión de asistencia con información de materia y docente para estudiantes"""
+
+    id: int
+    titulo: str
+    descripcion: Optional[str]
+    fecha_inicio: datetime
+    fecha_fin: Optional[datetime]
+    duracion_minutos: int
+    radio_permitido_metros: int
+    permite_asistencia_tardia: bool
+    minutos_tolerancia: int
+    estado: str
+    esta_activa: bool
+    fecha_creacion: datetime
+
+    # Información adicional para estudiantes
+    materia: Optional[MateriaBasica] = None
+    docente: Optional[DocenteBasico] = None
+
+    # Status de asistencia del estudiante
+    mi_asistencia: Optional[AsistenciaEstudianteOut] = None
+
+    # No usar from_attributes para este esquema
+    class Config:
+        # Removido from_attributes para evitar problemas con objetos dinámicos
+        pass

@@ -595,3 +595,98 @@ def obtener_periodo_y_gestion_por_fecha(db: Session, fecha):
         )
 
     return periodo.id, periodo.gestion_id
+
+
+def obtener_sesiones_activas_estudiante_con_info(
+    db: Session, estudiante_id: int
+) -> List[SesionAsistencia]:
+    """
+    Obtener sesiones activas del estudiante con información de materia y docente
+    """
+    from app.models.inscripcion import Inscripcion
+    from app.models.materia import Materia
+    from app.models.docente_materia import DocenteMateria
+    from app.models.docente import Docente
+
+    # Query base con todas las relaciones necesarias
+    query = (
+        db.query(SesionAsistencia)
+        .join(Inscripcion, Inscripcion.curso_id == SesionAsistencia.curso_id)
+        .join(Materia, Materia.id == SesionAsistencia.materia_id)
+        .outerjoin(DocenteMateria, DocenteMateria.materia_id == Materia.id)
+        .outerjoin(Docente, Docente.id == DocenteMateria.docente_id)
+        .options(
+            # Cargar las relaciones
+            joinedload(
+                SesionAsistencia.asistencias.and_(
+                    AsistenciaEstudiante.estudiante_id == estudiante_id
+                )
+            ),
+        )
+        .filter(
+            and_(
+                Inscripcion.estudiante_id == estudiante_id,
+                SesionAsistencia.estado == "activa",
+                # Asegurar que el estudiante tenga un registro de asistencia
+                AsistenciaEstudiante.sesion_id == SesionAsistencia.id,
+                AsistenciaEstudiante.estudiante_id == estudiante_id,
+            )
+        )
+        .order_by(SesionAsistencia.fecha_inicio.desc())
+    )
+
+    sesiones = query.all()
+
+    # Enriquecer cada sesión con información adicional
+    sesiones_enriquecidas = []
+    for sesion in sesiones:
+        # Obtener información de la materia
+        materia = db.query(Materia).filter(Materia.id == sesion.materia_id).first()
+
+        # Obtener información del docente
+        docente_materia = (
+            db.query(DocenteMateria)
+            .options(joinedload(DocenteMateria.docente))
+            .filter(DocenteMateria.materia_id == sesion.materia_id)
+            .first()
+        )
+
+        # Obtener la asistencia del estudiante para esta sesión
+        mi_asistencia = (
+            db.query(AsistenciaEstudiante)
+            .filter(
+                and_(
+                    AsistenciaEstudiante.sesion_id == sesion.id,
+                    AsistenciaEstudiante.estudiante_id == estudiante_id,
+                )
+            )
+            .first()
+        )
+
+        # Agregar atributos dinámicos a la sesión
+        if materia:
+            sesion.materia = {
+                "id": materia.id,
+                "nombre": materia.nombre,
+                "descripcion": materia.descripcion,
+                "sigla": getattr(materia, "sigla", None),
+            }
+        else:
+            sesion.materia = None
+
+        if docente_materia and docente_materia.docente:
+            sesion.docente = {
+                "id": docente_materia.docente.id,
+                "nombre": docente_materia.docente.nombre,
+                "apellido": docente_materia.docente.apellido,
+                "correo": docente_materia.docente.correo,
+                "telefono": docente_materia.docente.telefono,
+            }
+        else:
+            sesion.docente = None
+
+        sesion.mi_asistencia = mi_asistencia
+
+        sesiones_enriquecidas.append(sesion)
+
+    return sesiones_enriquecidas
