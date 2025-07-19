@@ -16,3 +16,4 @@ matplotlib
 seaborn
 joblib
 python-dotenv
+jinja2

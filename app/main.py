@@ -23,6 +23,7 @@ from app.routers import (
     estudiante_info_academica,
     sesion_asistencia,
     notificaciones,
+    informacion_academica,
 )
 
 app = FastAPI(
@@ -62,3 +63,4 @@ app.include_router(auth.router)
 app.include_router(estudiante_info_academica.router)
 app.include_router(sesion_asistencia.router)
 app.include_router(notificaciones.router)
+app.include_router(informacion_academica.router)

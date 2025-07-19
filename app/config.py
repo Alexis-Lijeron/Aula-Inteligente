@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     CLOUD_API_KEY: str = ""
     CLOUD_API_SECRET: str = ""
     SECRET_KEY: str = "supersecreto123"
+    # 🆕 CONFIGURACIÓN SMTP PARA CORREO ELECTRÓNICO
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    FROM_EMAIL: str = ""
+    FROM_NAME: str = "Sistema de Gestión Académica"
 
     class Config:
         env_file = ".env"
