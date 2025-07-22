@@ -5,31 +5,24 @@ from app.models.docente_materia import DocenteMateria
 
 
 def seed_docente_materia(db: Session):
+    docentes = db.query(Docente).filter(Docente.is_doc == True).all()
     materias = db.query(Materia).all()
-    docentes = db.query(Docente).filter_by(is_doc=True).all()
-
-    if len(docentes) < len(materias):
-        print("❌ No hay suficientes docentes para asignar una materia a cada uno.")
-        return
 
     asignaciones = []
-    usados = set()
-
-    for i, materia in enumerate(materias):
+    for i in range(min(len(docentes), len(materias))):
         docente = docentes[i]
+        materia = materias[i]
 
         ya_existe = (
             db.query(DocenteMateria)
             .filter_by(docente_id=docente.id, materia_id=materia.id)
             .first()
         )
-
         if not ya_existe:
             asignaciones.append(
                 DocenteMateria(docente_id=docente.id, materia_id=materia.id)
             )
-            usados.add(docente.id)
 
     db.bulk_save_objects(asignaciones)
     db.commit()
-    print(f"✅ Se asignaron {len(asignaciones)} materias a docentes.")
+    print(f"✅ Asignadas {len(asignaciones)} materias a docentes.")

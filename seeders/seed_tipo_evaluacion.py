@@ -4,25 +4,22 @@ from app.models.tipo_evaluacion import TipoEvaluacion
 
 def seed_tipo_evaluacion(db: Session):
     tipos = [
-        "Exámenes",
-        "Tareas",
-        "Exposiciones",
-        "Participaciones",
         "Asistencia",
+        "Participaciones",
+        "Tareas",
         "Prácticas",
-        "Proyecto final",
-        "Trabajo grupal",
+        "Exposiciones",
         "Ensayos",
         "Cuestionarios",
+        "Trabajo grupal",
+        "Exámenes",
+        "Proyecto final",
     ]
 
     for nombre in tipos:
-        existe = (
-            db.query(TipoEvaluacion).filter(TipoEvaluacion.nombre == nombre).first()
-        )
+        existe = db.query(TipoEvaluacion).filter_by(nombre=nombre).first()
         if not existe:
-            nuevo = TipoEvaluacion(nombre=nombre)
-            db.add(nuevo)
+            db.add(TipoEvaluacion(nombre=nombre))
 
     db.commit()
-    print("✔️ Tipos de evaluación insertados correctamente.")
+    print("✅ Tipos de evaluación registrados.")

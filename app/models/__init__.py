@@ -14,3 +14,5 @@ from .periodo import Periodo
 from .prediccion_rendimiento import PrediccionRendimiento
 from .padre import Padre
 from .padre_estudiante import PadreEstudiante
+from .notificacion import Notificacion
+from .sesion_asistencia import SesionAsistencia

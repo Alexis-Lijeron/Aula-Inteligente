@@ -1,8 +1,8 @@
 """Primera migracion
 
-Revision ID: 1db13882d216
+Revision ID: ca42f80eba8c
 Revises: 
-Create Date: 2025-07-14 19:34:21.061256
+Create Date: 2025-07-21 23:33:36.247270
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '1db13882d216'
+revision: str = 'ca42f80eba8c'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -167,7 +167,7 @@ def upgrade() -> None:
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['gestion_id'], ['gestiones.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('nombre')
+    sa.UniqueConstraint('nombre', 'gestion_id', name='uq_nombre_gestion')
     )
     op.create_index(op.f('ix_periodos_id'), 'periodos', ['id'], unique=False)
     op.create_table('peso_tipo_evaluacion',
@@ -238,12 +238,84 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_rendimiento_final_id'), 'rendimiento_final', ['id'], unique=False)
+    op.create_table('sesiones_asistencia',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('titulo', sa.String(length=200), nullable=False),
+    sa.Column('descripcion', sa.Text(), nullable=True),
+    sa.Column('docente_id', sa.Integer(), nullable=False),
+    sa.Column('curso_id', sa.Integer(), nullable=False),
+    sa.Column('materia_id', sa.Integer(), nullable=False),
+    sa.Column('periodo_id', sa.Integer(), nullable=False),
+    sa.Column('fecha_inicio', sa.DateTime(), nullable=False),
+    sa.Column('fecha_fin', sa.DateTime(), nullable=True),
+    sa.Column('duracion_minutos', sa.Integer(), nullable=True),
+    sa.Column('latitud_docente', sa.Float(), nullable=False),
+    sa.Column('longitud_docente', sa.Float(), nullable=False),
+    sa.Column('direccion_referencia', sa.String(length=500), nullable=True),
+    sa.Column('radio_permitido_metros', sa.Integer(), nullable=True),
+    sa.Column('permite_asistencia_tardia', sa.Boolean(), nullable=True),
+    sa.Column('minutos_tolerancia', sa.Integer(), nullable=True),
+    sa.Column('estado', sa.String(length=20), nullable=True),
+    sa.Column('fecha_creacion', sa.DateTime(), nullable=True),
+    sa.Column('fecha_actualizacion', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['curso_id'], ['cursos.id'], ),
+    sa.ForeignKeyConstraint(['docente_id'], ['docentes.id'], ),
+    sa.ForeignKeyConstraint(['materia_id'], ['materias.id'], ),
+    sa.ForeignKeyConstraint(['periodo_id'], ['periodos.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_sesiones_asistencia_id'), 'sesiones_asistencia', ['id'], unique=False)
+    op.create_table('asistencias_estudiantes',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('sesion_id', sa.Integer(), nullable=False),
+    sa.Column('estudiante_id', sa.Integer(), nullable=False),
+    sa.Column('presente', sa.Boolean(), nullable=True),
+    sa.Column('fecha_marcado', sa.DateTime(), nullable=True),
+    sa.Column('latitud_estudiante', sa.Float(), nullable=True),
+    sa.Column('longitud_estudiante', sa.Float(), nullable=True),
+    sa.Column('distancia_metros', sa.Float(), nullable=True),
+    sa.Column('metodo_marcado', sa.String(length=20), nullable=True),
+    sa.Column('observaciones', sa.Text(), nullable=True),
+    sa.Column('es_tardanza', sa.Boolean(), nullable=True),
+    sa.Column('justificado', sa.Boolean(), nullable=True),
+    sa.Column('motivo_justificacion', sa.String(length=500), nullable=True),
+    sa.Column('fecha_creacion', sa.DateTime(), nullable=True),
+    sa.Column('fecha_actualizacion', sa.DateTime(), nullable=True),
+    sa.ForeignKeyConstraint(['estudiante_id'], ['estudiantes.id'], ),
+    sa.ForeignKeyConstraint(['sesion_id'], ['sesiones_asistencia.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_asistencias_estudiantes_id'), 'asistencias_estudiantes', ['id'], unique=False)
+    op.create_table('notificaciones',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('titulo', sa.String(), nullable=False),
+    sa.Column('mensaje', sa.Text(), nullable=False),
+    sa.Column('tipo', sa.String(), nullable=False),
+    sa.Column('leida', sa.Boolean(), nullable=True),
+    sa.Column('padre_id', sa.Integer(), nullable=True),
+    sa.Column('estudiante_id', sa.Integer(), nullable=False),
+    sa.Column('evaluacion_id', sa.Integer(), nullable=True),
+    sa.Column('para_estudiante', sa.Boolean(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['estudiante_id'], ['estudiantes.id'], ),
+    sa.ForeignKeyConstraint(['evaluacion_id'], ['evaluaciones.id'], ),
+    sa.ForeignKeyConstraint(['padre_id'], ['padres.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_notificaciones_id'), 'notificaciones', ['id'], unique=False)
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_notificaciones_id'), table_name='notificaciones')
+    op.drop_table('notificaciones')
+    op.drop_index(op.f('ix_asistencias_estudiantes_id'), table_name='asistencias_estudiantes')
+    op.drop_table('asistencias_estudiantes')
+    op.drop_index(op.f('ix_sesiones_asistencia_id'), table_name='sesiones_asistencia')
+    op.drop_table('sesiones_asistencia')
     op.drop_index(op.f('ix_rendimiento_final_id'), table_name='rendimiento_final')
     op.drop_table('rendimiento_final')
     op.drop_index(op.f('ix_prediccion_rendimiento_id'), table_name='prediccion_rendimiento')

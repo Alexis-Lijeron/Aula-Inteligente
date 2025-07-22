@@ -3,6 +3,7 @@ from app.models.estudiante import Estudiante
 from app.models.curso import Curso
 import random
 from datetime import date, timedelta
+from app.seguridad import hash_contrasena
 
 nombres_masculinos = [
     "Carlos",
@@ -99,7 +100,6 @@ def generar_nombre_tutor(tutores_usados: dict):
             tutores_usados[base] = cantidad_usos + 1
             return tutor
         else:
-            # 💡 crear tutor artificialmente único si ya se repitió 3 veces
             tutor = f"{base} Extra{random.randint(100, 999)}"
             if tutor not in tutores_usados:
                 tutores_usados[tutor] = 1
@@ -126,16 +126,28 @@ def generar_direccion(ya_usados):
             return direccion
 
 
+def generar_correo(nombre, apellido, usados):
+    base = f"{nombre.lower()}.{apellido.lower()}"
+    correo = f"{base}@gmail.com"
+    contador = 1
+    while correo in usados:
+        correo = f"{base}{contador}@gmail.com"
+        contador += 1
+    usados.add(correo)
+    return correo
+
+
 def seed_estudiantes(db: Session):
-    cursos = db.query(Curso).all()
+    cursos = db.query(Curso).filter(Curso.nivel == "Secundaria").all()
     total_insertados = 0
 
     tutores_usados = {}
     telefonos_usados = set()
     direcciones_usadas = set()
+    correos_usados = set()
 
     for curso in cursos:
-        for _ in range(30):  # 30 estudiantes por curso
+        for _ in range(20):  # Solo 20 estudiantes por curso
             genero = random.choice(["Masculino", "Femenino"])
             nombre = random.choice(
                 nombres_masculinos if genero == "Masculino" else nombres_femeninos
@@ -145,6 +157,8 @@ def seed_estudiantes(db: Session):
             tutor = generar_nombre_tutor(tutores_usados)
             telefono_tutor = generar_telefono(telefonos_usados)
             direccion = generar_direccion(direcciones_usadas)
+            correo = generar_correo(nombre, apellido, correos_usados)
+            contrasena = hash_contrasena(nombre.lower())
 
             estudiante = Estudiante(
                 nombre=nombre,
@@ -155,6 +169,8 @@ def seed_estudiantes(db: Session):
                 nombre_tutor=tutor,
                 telefono_tutor=telefono_tutor,
                 direccion_casa=direccion,
+                correo=correo,
+                contrasena=contrasena,
             )
 
             db.add(estudiante)
@@ -162,5 +178,5 @@ def seed_estudiantes(db: Session):
 
     db.commit()
     print(
-        f"✅ Se insertaron {total_insertados} estudiantes (30 por curso sin repetir tutor, teléfono ni dirección)."
+        f"✅ Se insertaron {total_insertados} estudiantes (20 por curso, secundaria)."
     )
